@@ -526,7 +526,7 @@ class RunSignatures(object):
                         words = re.findall(r"[A-Za-z0-9\.]+", alert["signature"])
                         famcheck = words[2]
                         famchecklower = famcheck.lower()
-                        if famchecklower == "win32":
+                        if famchecklower == "win32" or famchecklower == "w32":
                             famcheck = words[3]
                             famchecklower = famcheck.lower()
 
@@ -547,6 +547,10 @@ class RunSignatures(object):
                             "probably",
                             "w2km",
                             "http",
+                            "abuse.ch",
+                            "win32",
+                            "unknown",
+                            "single",
                         ]
                         isgood = True
                         for black in blacklist:
@@ -667,6 +671,7 @@ class GetFeeds(object):
 
     def __init__(self, results):
         self.results = results
+        self.results["feeds"] = dict()
 
     def process(self, feed):
         """Process modules with either downloaded data directly, or by
@@ -691,7 +696,7 @@ class GetFeeds(object):
             except:
                 log.exception("Failed to run feed \"%s\"", current.name)
                 return
-        self.results["feeds"] = dict()
+
         self.results["feeds"][current.name] = current.get_feedpath()
 
     def run(self):

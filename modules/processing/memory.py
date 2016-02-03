@@ -6,6 +6,11 @@ import os
 import logging
 import time
 
+try:
+    import re2 as re
+except ImportError:
+    import re
+
 from lib.cuckoo.common.abstracts import Processing
 from lib.cuckoo.common.config import Config
 from lib.cuckoo.common.constants import CUCKOO_ROOT
@@ -1059,6 +1064,7 @@ class VolatilityManager(object):
             results["netscan"] = vol.netscan()
 
         self.find_taint(results)
+        self.do_strings()
         self.cleanup()
 
         return self.mask_filter(results)
@@ -1097,6 +1103,32 @@ class VolatilityManager(object):
                 os.remove(self.memfile)
             except OSError:
                 log.error("Unable to delete memory dump file at path \"%s\" ", self.memfile)
+
+    def do_strings(self):
+        strings_path = None
+        if self.voptions.basic.dostrings:
+            try:
+                data = open(self.memfile, "rb").read()
+            except (IOError, OSError) as e:
+                raise CuckooProcessingError("Error opening file %s" % e)
+
+            nulltermonly = self.voptions.basic.get("strings_nullterminated_only", True)
+            minchars = self.voptions.basic.get("strings_minchars", 5)
+
+            if nulltermonly:
+                apat = "([\x20-\x7e]{" + str(minchars) + ",})\x00"
+                upat = "((?:[\x20-\x7e][\x00]){" + str(minchars) + ",})\x00\x00"
+            else:
+                apat = "[\x20-\x7e]{" + str(minchars) + ",}"
+                upat = "(?:[\x20-\x7e][\x00]){" + str(minchars) + ",}"
+
+            strings = re.findall(apat, data)
+            for ws in re.findall(upat, data):
+                strings.append(str(ws.decode("utf-16le")))
+            data = None
+            f=open(self.memfile + ".strings", "w")
+            f.write("\n".join(strings))
+            f.close()
 
 class Memory(Processing):
     """Volatility Analyzer."""

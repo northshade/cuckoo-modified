@@ -31,6 +31,24 @@ try:
 except ImportError:
     HAVE_CHARDET = False
 
+def validate_referer(url):
+    if not url:
+        return None
+
+    #Django Validator BSD lic. https://github.com/django/django
+    url_re = re.compile(
+        r'^(?:http|ftp)s?://' # http:// or https://
+        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|' #domain...
+        r'localhost|' #localhost...
+        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})' # ...or ip
+        r'(?::\d+)?' # optional port
+        r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+
+    if not url_re.match(url):
+        return None
+
+    return url
+
 def create_folders(root=".", folders=[]):
     """Create directories.
     @param root: root path.
@@ -1440,6 +1458,10 @@ def get_vt_consensus(namelist):
         "kazy",
         "x97m",
         "msword",
+        "cozm",
+        "eldorado",
+        "fakems",
+        "cloud",
     ]
 
     finaltoks = defaultdict(int)
@@ -1588,7 +1610,9 @@ def default_converter(v):
     # Fix signed ints (bson is kind of limited there).
     if type(v) is int:
         return v & 0xFFFFFFFF
-    elif type(v) is long:
+    # Need to account for subclasses since pymongo's bson module
+    # uses 'bson.int64.Int64' class for 64-bit values.
+    elif issubclass(type(v), long):
         if v & 0xFFFFFFFF00000000:
             return v & 0xFFFFFFFFFFFFFFFF
         else:

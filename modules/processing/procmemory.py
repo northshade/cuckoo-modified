@@ -5,6 +5,16 @@
 import os
 import struct
 
+try:
+    import re2 as re
+except ImportError:
+    import re
+
+from lib.cuckoo.common.abstracts import Processing
+from lib.cuckoo.common.objects import File
+from lib.cuckoo.common.constants import CUCKOO_ROOT
+from lib.cuckoo.common.exceptions import CuckooProcessingError
+
 PAGE_NOACCESS           = 0x00000001
 PAGE_READONLY           = 0x00000002
 PAGE_READWRITE          = 0x00000004
@@ -27,10 +37,6 @@ protmap = {
     PAGE_EXECUTE_READWRITE : "RWX",
     PAGE_EXECUTE_WRITECOPY : "RWXC",
 }
-
-from lib.cuckoo.common.abstracts import Processing
-from lib.cuckoo.common.objects import File
-from lib.cuckoo.common.constants import CUCKOO_ROOT
 
 class ProcessMemory(Processing):
     """Analyze process memory dumps."""
@@ -91,9 +97,17 @@ class ProcessMemory(Processing):
         """
         self.key = "procmemory"
         results = []
+        do_strings = self.options.get("strings", False)
+        nulltermonly = self.options.get("nullterminated_only", True)
+        minchars = self.options.get("minchars", 5)
 
         if os.path.exists(self.pmemory_path):
             for dmp in os.listdir(self.pmemory_path):
+                # if we're re-processing this task, this means if zips are enabled, we won't do any reprocessing on the
+                # process dumps (only matters for now for Yara)
+                if not dmp.endswith(".dmp"):
+                    continue
+
                 dmp_path = os.path.join(self.pmemory_path, dmp)
                 dmp_file = File(dmp_path)
                 process_name = ""
@@ -110,8 +124,31 @@ class ProcessMemory(Processing):
                     name=process_name,
                     path=process_path,
                     yara=dmp_file.get_yara(os.path.join(CUCKOO_ROOT, "data", "yara", "index_memory.yar")),
-                    address_space=self.parse_dump(dmp_path)
+                    address_space=self.parse_dump(dmp_path),
                 )
+                    
+                if do_strings:
+                    try:
+                        data = open(dmp_path, "rb").read()
+                    except (IOError, OSError) as e:
+                        raise CuckooProcessingError("Error opening file %s" % e)
+
+                    if nulltermonly:
+                        apat = "([\x20-\x7e]{" + str(minchars) + ",})\x00"
+                        upat = "((?:[\x20-\x7e][\x00]){" + str(minchars) + ",})\x00\x00"
+                    else:
+                        apat = "[\x20-\x7e]{" + str(minchars) + ",}"
+                        upat = "(?:[\x20-\x7e][\x00]){" + str(minchars) + ",}"
+
+                    strings = re.findall(apat, data)
+                    for ws in re.findall(upat, data):
+                        strings.append(str(ws.decode("utf-16le")))
+                    data = None
+
+                    proc["strings_path"] = dmp_path + ".strings"
+                    f=open(proc["strings_path"], "w")
+                    f.write("\n".join(strings))
+                    f.close()
 
                 # Deduplicate configs
                 if proc["yara"]:
@@ -174,5 +211,4 @@ class ProcessMemory(Processing):
                             match["strings"] = ["".join(output)]
 
                 results.append(proc)
-
         return results

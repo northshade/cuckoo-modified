@@ -5,18 +5,19 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{365a3967-518e-457b-972a-3c90834f0f80}</ProjectGuid>
     <ProjectHome />
-    <StartupFile>manage.py</StartupFile>
+    <StartupFile />
     <SearchPath />
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
-    <ProjectTypeGuids>{5F0BE9CA-D677-4A4D-8806-6076C0FAAD37};{349c5851-65df-11da-9384-00065b846f21};{888888a0-9f3d-457c-b088-3a5042f75d52}</ProjectTypeGuids>
-    <LaunchProvider>Django launcher</LaunchProvider>
+    <OutputPath>.</OutputPath>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>
     <VSToolsPath Condition="'$(VSToolsPath)' == ''">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
-    <UseIISExpress>true</UseIISExpress>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'" />
   <PropertyGroup Condition="'$(Configuration)' == 'Release'" />
+  <PropertyGroup>
+    <PtvsTargetsFile>$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets</PtvsTargetsFile>
+  </PropertyGroup>
   <ItemGroup>
     <Content Include="analyzer\windows\bin\execsc.exe" />
     <Content Include="analyzer\windows\bin\loader.exe" />
@@ -163,7 +164,6 @@
     <Compile Include="lib\cuckoo\common\office\oleid.py" />
     <Compile Include="lib\cuckoo\common\office\olevba.py" />
     <Compile Include="lib\cuckoo\common\office\pyparsing.py" />
-    <Compile Include="lib\cuckoo\common\office\vbadeobf.py" />
     <Compile Include="lib\cuckoo\common\office\__init__.py" />
     <Compile Include="lib\cuckoo\common\pdftools\pdf-parser.py" />
     <Compile Include="lib\cuckoo\common\pdftools\pdfid.py" />
@@ -207,6 +207,9 @@
     <Compile Include="modules\auxiliary\tor.py" />
     <Compile Include="modules\feeds\bad_ssl_certs.py" />
     <Compile Include="modules\feeds\__init__.py" />
+    <Compile Include="modules\reporting\compression.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="modules\reporting\elasticsearchdb.py" />
     <Compile Include="modules\reporting\maec41.py" />
     <Compile Include="modules\reporting\malheur.py" />
@@ -218,6 +221,7 @@
     <Compile Include="modules\reporting\resubmitexe.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="modules\reporting\retention.py" />
     <Compile Include="modules\reporting\syslog.py" />
     <Compile Include="modules\__init__.py" />
     <Compile Include="tests\abstracts_tests.py" />
@@ -398,6 +402,7 @@
     <Content Include="web\static\fonts\glyphicons-halflings-regular.ttf" />
     <Content Include="web\static\fonts\glyphicons-halflings-regular.woff" />
     <Content Include="web\static\fonts\glyphicons-halflings-regular.woff2" />
+    <Content Include="web\templates\analysis\antivirus.html" />
     <Content Include="web\templates\analysis\behavior\_api_call.html" />
     <Content Include="web\templates\analysis\behavior\_search.html" />
     <Content Include="web\templates\analysis\behavior\_search_results.html" />
@@ -405,6 +410,7 @@
     <Content Include="web\templates\analysis\memory\_netscan.html" />
     <Content Include="web\templates\analysis\memory\_sockscan.html" />
     <Content Include="web\templates\analysis\network\_smtp.html" />
+    <Content Include="web\templates\analysis\shrike.html" />
     <Content Include="web\templates\analysis\static\_dotnet.html" />
     <Content Include="web\templates\analysis\static\_java.html" />
     <Content Include="web\templates\analysis\static\_office.html" />
@@ -421,6 +427,10 @@
     <Content Include="web\templates\analysis\procmemory\index.html" />
     <Content Include="web\templates\analysis\static\_pdf.html" />
     <Content Include="web\templates\analysis\static\_ratconfig.html" />
+    <Content Include="web\templates\analysis\surialert.html" />
+    <Content Include="web\templates\analysis\surifiles.html" />
+    <Content Include="web\templates\analysis\surihttp.html" />
+    <Content Include="web\templates\analysis\suritls.html" />
     <Content Include="web\templates\api\index.html" />
     <Content Include="web\templates\base.html" />
     <Content Include="web\templates\error.html" />
@@ -609,43 +619,4 @@
     </WebPiReference>
   </ItemGroup>
   <Import Project="$(VSToolsPath)\Python Tools\Microsoft.PythonTools.Django.targets" />
-  <ProjectExtensions>
-    <VisualStudio>
-      <FlavorProperties GUID="{349c5851-65df-11da-9384-00065b846f21}">
-        <WebProjectProperties>
-          <UseIIS>True</UseIIS>
-          <AutoAssignPort>True</AutoAssignPort>
-          <DevelopmentServerPort>0</DevelopmentServerPort>
-          <DevelopmentServerVPath>/</DevelopmentServerVPath>
-          <IISUrl>http://localhost:1058/</IISUrl>
-          <NTLMAuthentication>False</NTLMAuthentication>
-          <UseCustomServer>False</UseCustomServer>
-          <CustomServerUrl>
-          </CustomServerUrl>
-          <SaveServerSettingsInUserFile>False</SaveServerSettingsInUserFile>
-        </WebProjectProperties>
-      </FlavorProperties>
-      <FlavorProperties GUID="{349c5851-65df-11da-9384-00065b846f21}" User="">
-        <WebProjectProperties>
-          <StartPageUrl>
-          </StartPageUrl>
-          <StartAction>CurrentPage</StartAction>
-          <AspNetDebugging>True</AspNetDebugging>
-          <SilverlightDebugging>False</SilverlightDebugging>
-          <NativeDebugging>False</NativeDebugging>
-          <SQLDebugging>False</SQLDebugging>
-          <ExternalProgram>
-          </ExternalProgram>
-          <StartExternalURL>
-          </StartExternalURL>
-          <StartCmdLineArguments>
-          </StartCmdLineArguments>
-          <StartWorkingDirectory>
-          </StartWorkingDirectory>
-          <EnableENC>True</EnableENC>
-          <AlwaysStartWebServerOnDebug>False</AlwaysStartWebServerOnDebug>
-        </WebProjectProperties>
-      </FlavorProperties>
-    </VisualStudio>
-  </ProjectExtensions>
 </Project>

@@ -20,6 +20,10 @@ def demux_zip(filename, options):
     retlist = []
 
     try:
+        # only extract from files with no extension or with .bin (downloaded from us) or .zip extensions
+        ext = os.path.splitext(filename)[1]
+        if ext != "" and ext != ".zip" and ext != ".bin":
+            return retlist
         # don't try to extract from office docs
         magic = File(filename).get_type()
         if "Microsoft" in magic or "Java Jar" in magic or "Composite Document File" in magic:
@@ -55,7 +59,7 @@ def demux_zip(filename, options):
                     continue
                 extensions = [
                     "", ".exe", ".dll", ".jar", ".pdf", ".msi", ".bin", ".scr", ".zip", ".htm", ".html", 
-                    ".doc", ".dot", ".docx", ".dotx", ".docm", ".dotm", ".docb", ".mht", 
+                    ".doc", ".dot", ".docx", ".dotx", ".docm", ".dotm", ".docb", ".mht", ".mso", ".js", ".jse", ".vbs", ".vbe",
                     ".xls", ".xlt", ".xlm", ".xlsx", ".xltx", ".xlsm", ".xltm", ".xlsb", ".xla", ".xlam", ".xll", ".xlw",
                     ".ppt", ".pot", ".pps", ".pptx", ".pptm", ".potx", ".potm", ".ppam", ".ppsx", ".ppsm", ".sldx", ".sldm"
                 ]
@@ -124,7 +128,7 @@ def demux_rar(filename, options):
                     continue
                 extensions = [
                     "", ".exe", ".dll", ".jar", ".pdf", ".msi", ".bin", ".scr", ".zip", ".htm", ".html", 
-                    ".doc", ".dot", ".docx", ".dotx", ".docm", ".dotm", ".docb", ".mht", 
+                    ".doc", ".dot", ".docx", ".dotx", ".docm", ".dotm", ".docb", ".mht", ".mso", ".js", ".jse", ".vbs", ".vbe",
                     ".xls", ".xlt", ".xlm", ".xlsx", ".xltx", ".xlsm", ".xltm", ".xlsb", ".xla", ".xlam", ".xll", ".xlw",
                     ".ppt", ".pot", ".pps", ".pptx", ".pptm", ".potx", ".potm", ".ppam", ".ppsx", ".ppsm", ".sldx", ".sldm"
                 ]

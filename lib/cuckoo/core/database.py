@@ -30,7 +30,7 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "4b09c454108c"
+SCHEMA_VERSION = "f111620bb8"
 TASK_PENDING = "pending"
 TASK_RUNNING = "running"
 TASK_COMPLETED = "completed"
@@ -301,6 +301,13 @@ class Task(Base):
     machine_id = Column(Integer, nullable=True)
     guest = relationship("Guest", uselist=False, backref="tasks", cascade="save-update, delete")
     errors = relationship("Error", backref="tasks", cascade="save-update, delete")
+
+    shrike_url = Column(String(4096), nullable=True)
+    shrike_refer = Column(String(4096), nullable=True)
+    shrike_msg = Column(String(4096), nullable=True)
+    shrike_sid = Column(Integer(), nullable=True)
+
+    parent_id = Column(Integer(), nullable=True)
 
     def to_dict(self):
         """Converts object to dict.
@@ -823,7 +830,9 @@ class Database(object):
     @classlock
     def add(self, obj, timeout=0, package="", options="", priority=1,
             custom="", machine="", platform="", tags=None,
-            memory=False, enforce_timeout=False, clock=None):
+            memory=False, enforce_timeout=False, clock=None,
+            shrike_url=None, shrike_msg=None, 
+            shrike_sid = None, shrike_refer=None):
         """Add a task to database.
         @param obj: object to add (File or URL).
         @param timeout: selected timeout.
@@ -896,7 +905,10 @@ class Database(object):
         task.platform = platform
         task.memory = memory
         task.enforce_timeout = enforce_timeout
-
+        task.shrike_url = shrike_url
+        task.shrike_msg = shrike_msg
+        task.shrike_sid = shrike_sid
+        task.shrike_refer =  shrike_refer
         # Deal with tags format (i.e., foo,bar,baz)
         if tags:
             for tag in tags.replace(" ", "").split(","):
@@ -936,7 +948,8 @@ class Database(object):
 
     def add_path(self, file_path, timeout=0, package="", options="",
                  priority=1, custom="", machine="", platform="", tags=None,
-                 memory=False, enforce_timeout=False, clock=None):
+                 memory=False, enforce_timeout=False, clock=None, shrike_url=None, 
+                 shrike_msg=None, shrike_sid = None, shrike_refer=None):
         """Add a task to database from file path.
         @param file_path: sample path.
         @param timeout: selected timeout.
@@ -963,11 +976,12 @@ class Database(object):
 
         return self.add(File(file_path), timeout, package, options, priority,
                         custom, machine, platform, tags, memory,
-                        enforce_timeout, clock)
+                        enforce_timeout, clock, shrike_url, shrike_msg, shrike_sid, shrike_refer)
 
     def demux_sample_and_add_to_db(self, file_path, timeout=0, package="", options="", priority=1,
                                    custom="", machine="", platform="", tags=None,
-                                   memory=False, enforce_timeout=False, clock=None):
+                                   memory=False, enforce_timeout=False, clock=None,shrike_url=None,
+                                   shrike_msg=None, shrike_sid = None, shrike_refer=None):
         """
         Handles ZIP file submissions, submitting each extracted file to the database
         Returns a list of added task IDs
@@ -988,7 +1002,11 @@ class Database(object):
                                     custom=custom,
                                     enforce_timeout=enforce_timeout,
                                     tags=tags,
-                                    clock=clock)
+                                    clock=clock,
+                                    shrike_url=shrike_url,
+                                    shrike_msg=shrike_msg,
+                                    shrike_sid=shrike_sid,
+                                    shrike_refer=shrike_refer)
             if task_id:
                 task_ids.append(task_id)
 
@@ -997,7 +1015,8 @@ class Database(object):
     @classlock
     def add_url(self, url, timeout=0, package="", options="", priority=1,
                 custom="", machine="", platform="", tags=None, memory=False,
-                enforce_timeout=False, clock=None):
+                enforce_timeout=False, clock=None, shrike_url=None, shrike_msg=None, 
+                shrike_sid = None, shrike_refer=None):
         """Add a task to database from url.
         @param url: url.
         @param timeout: selected timeout.
@@ -1021,7 +1040,8 @@ class Database(object):
 
         return self.add(URL(url), timeout, package, options, priority,
                         custom, machine, platform, tags, memory,
-                        enforce_timeout, clock)
+                        enforce_timeout, clock, shrike_url, shrike_msg,
+                        shrike_sid, shrike_refer)
 
     @classlock
     def reschedule(self, task_id):
@@ -1064,7 +1084,8 @@ class Database(object):
     @classlock
     def list_tasks(self, limit=None, details=False, category=None,
                    offset=None, status=None, sample_id=None, not_status=None,
-                   completed_after=None, order_by=None):
+                   completed_after=None, order_by=None, added_before=None,
+                   id_before=None, id_after=None):
         """Retrieve list of task.
         @param limit: specify a limit of entries.
         @param details: if details about must be included
@@ -1075,6 +1096,9 @@ class Database(object):
         @param not_status: exclude this task status from filter
         @param completed_after: only list tasks completed after this timestamp
         @param order_by: definition which field to sort by
+        @param added_before: tasks added before a specific timestamp
+        @param id_before: filter by tasks which is less than this value
+        @param id_after filter by tasks which is greater than this value
         @return: list of tasks.
         """
         session = self.Session()
@@ -1091,9 +1115,14 @@ class Database(object):
                 search = search.options(joinedload("guest"), joinedload("errors"), joinedload("tags"))
             if sample_id is not None:
                 search = search.filter_by(sample_id=sample_id)
+            if id_before is not None:
+                search = search.filter(Task.id < id_before)
+            if id_after is not None:
+                search = search.filter(Task.id > id_after)
             if completed_after:
                 search = search.filter(Task.completed_on > completed_after)
-
+            if added_before:
+                search = search.filter(Task.added_on < added_before)
             if order_by is not None:
                 search = search.order_by(order_by)
             else:
