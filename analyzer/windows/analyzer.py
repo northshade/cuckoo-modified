@@ -330,6 +330,7 @@ class PipeHandler(Thread):
                         # unable to inject
                         if SERVICES_PID:
                             servproc = Process(pid=SERVICES_PID,suspended=False)
+                            servproc.set_critical()
                             filepath = servproc.get_filepath()
                             servproc.inject(dll=DEFAULT_DLL, interest=filepath, nosleepskip=True)
                             LASTINJECT_TIME = datetime.now()
@@ -348,6 +349,7 @@ class PipeHandler(Thread):
                 # Handle attempted shutdowns/restarts -- flush logs for all monitored processes
                 # additional handling can be added later
                 elif command.startswith("SHUTDOWN:"):
+                    log.info("Received shutdown request")
                     PROCESS_LOCK.acquire()
                     for process_id in PROCESS_LIST:
                         event_name = TERMINATE_EVENT + str(process_id)
@@ -355,6 +357,10 @@ class PipeHandler(Thread):
                         if event_handle:
                             KERNEL32.SetEvent(event_handle)
                             KERNEL32.CloseHandle(event_handle)
+                            if self.options.get("procmemdump"):
+                                p = Process(pid=process_id)
+                                p.dump_memory()
+                            dump_files()
                     PROCESS_LOCK.release()
                 # Handle case of malware terminating a process -- notify the target
                 # ahead of time so that it can flush its log buffer

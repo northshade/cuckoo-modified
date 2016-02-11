@@ -208,7 +208,7 @@ class File:
         file_type = None
         if HAVE_MAGIC:
             try:
-                ms = magic.open(magic.MAGIC_NONE)
+                ms = magic.open(magic.MAGIC_SYMLINK)
                 ms.load()
                 file_type = ms.file(self.file_path)
             except:
@@ -224,7 +224,7 @@ class File:
 
         if file_type is None:
             try:
-                p = subprocess.Popen(["file", "-b", self.file_path],
+                p = subprocess.Popen(["file", "-b", "-L", self.file_path],
                                      stdout=subprocess.PIPE)
                 file_type = p.stdout.read().strip()
             except:
@@ -239,7 +239,7 @@ class File:
         file_type = None
         if HAVE_MAGIC:
             try:
-                ms = magic.open(magic.MAGIC_MIME)
+                ms = magic.open(magic.MAGIC_MIME|magic.MAGIC_SYMLINK)
                 ms.load()
                 file_type = ms.file(self.file_path)
             except:
@@ -255,7 +255,7 @@ class File:
 
         if file_type is None:
             try:
-                p = subprocess.Popen(["file", "-b", "--mime-type", self.file_path],
+                p = subprocess.Popen(["file", "-b", "-L", "--mime-type", self.file_path],
                                      stdout=subprocess.PIPE)
                 file_type = p.stdout.read().strip()
             except:
@@ -473,9 +473,12 @@ class ProcDump(object):
             alloc["type"] = mem_type
             alloc["offset"] = offset
             alloc["PE"] = False
-            if f.read(2) == "MZ":
-                alloc["PE"] = True
-            f.seek(size-2, 1)
+            try:
+                if f.read(2) == "MZ":
+                    alloc["PE"] = True
+                f.seek(size-2, 1)
+            except:
+                break
             curchunk.append(alloc)
         if len(curchunk):
             address_space.append(self._coalesce_chunks(curchunk))
@@ -499,6 +502,8 @@ class ProcDump(object):
 
     def search(self, regex, flags=0, all=False):
         if all:
+            result = dict()
+            result["detail"] = []
             matches = []
             for map in self.address_space:
                 for chunk in map["chunks"]:
@@ -506,11 +511,16 @@ class ProcDump(object):
                     match = re.findall(regex, self.dumpfile.read(chunk["end"] - chunk["start"]), flags)
                     if match:
                         matches.extend(match)
-            return matches
+                        result["detail"].append({"match": match, "chunk": chunk})
+            result["matches"] = matches
+            return result
         else:
             for map in self.address_space:
                 for chunk in map["chunks"]:
                     self.dumpfile.seek(chunk["offset"])
                     match = re.search(regex, self.dumpfile.read(chunk["end"] - chunk["start"]), flags)
                     if match:
-                        return match
+                        result = dict()
+                        result["match"] = match
+                        result["chunk"] = chunk
+                        return result
