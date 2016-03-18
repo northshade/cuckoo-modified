@@ -572,7 +572,7 @@ class Database(object):
         row = None
         try:
             if machine != "":
-                row = session.query(Task).filter_by(status=TASK_PENDING).filter(Machine.name==machine).order_by("priority desc, added_on").first()
+                row = session.query(Task).filter_by(status=TASK_PENDING).filter_by(machine=machine).order_by("priority desc, added_on").first()
             else:
                 row = session.query(Task).filter_by(status=TASK_PENDING).order_by("priority desc, added_on").first()
 
@@ -678,10 +678,12 @@ class Database(object):
         if label and platform:
             # Wrong usage.
             log.error("You can select machine only by label or by platform.")
+            session.close()
             return None
         elif label and tags:
             # Also wrong usage.
             log.error("You can select machine only by label or by tags.")
+            session.close()
             return None
 
         try:
@@ -697,6 +699,7 @@ class Database(object):
             # Check if there are any machines that satisfy the
             # selection requirements.
             if not machines.count():
+                session.close()
                 raise CuckooOperationalError("No machines match selection criteria.")
 
             # Get the first free machine.
@@ -718,6 +721,8 @@ class Database(object):
                 return None
             finally:
                 session.close()
+        else:
+            session.close()
 
         return machine
 
@@ -747,6 +752,8 @@ class Database(object):
                 return None
             finally:
                 session.close()
+        else:
+            session.close()
 
         return machine
 
@@ -1082,7 +1089,34 @@ class Database(object):
         return add(task.target, task.timeout, task.package, task.options,
                    task.priority, task.custom, task.machine, task.platform,
                    tags, task.memory, task.enforce_timeout, task.clock)
+    @classlock
+    def count_matching_tasks(self, category=None,
+                   status=None, not_status=None):
+        """Retrieve list of task.
+        @param category: filter by category
+        @param status: filter by task status
+        @param not_status: exclude this task status from filter
+        @return: number of tasks.
+        """
+        session = self.Session()
+        try:
+            search = session.query(Task)
 
+            if status:
+                search = search.filter_by(status=status)
+            if not_status:
+                search = search.filter(Task.status != not_status)
+            if category:
+                search = search.filter_by(category=category)
+
+            tasks = search.count()
+            return tasks
+        except SQLAlchemyError as e:
+            log.debug("Database error counting tasks: {0}".format(e))
+            return []
+        finally:
+            session.close()
+            
     @classlock
     def list_tasks(self, limit=None, details=False, category=None,
                    offset=None, status=None, sample_id=None, not_status=None,
