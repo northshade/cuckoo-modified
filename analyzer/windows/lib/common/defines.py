@@ -8,11 +8,13 @@ NTDLL    = windll.ntdll
 KERNEL32 = windll.kernel32
 ADVAPI32 = windll.advapi32
 USER32   = windll.user32
+PDH      = windll.pdh
 
 BYTE      = c_ubyte
 USHORT    = c_ushort
 WORD      = c_ushort
 DWORD     = c_uint
+DWORDLONG = c_ulonglong
 LONG      = c_int
 ULONG     = c_uint
 UINT64    = c_ulonglong
@@ -26,6 +28,7 @@ ULONG_PTR = c_void_p
 SIZE_T    = c_void_p
 HMODULE   = c_void_p
 PWCHAR    = c_wchar_p
+DOUBLE    = c_double
 
 DEBUG_PROCESS             = 0x00000001
 CREATE_NEW_CONSOLE        = 0x00000010
@@ -91,6 +94,8 @@ TH32CS_SNAPPROCESS        = 0x02L
 
 GMEM_MOVEABLE             = 0x0002
 CF_TEXT                   = 0x0001
+
+PDH_FMT_DOUBLE            = 0x00000200
 
 class STARTUPINFO(Structure):
     _fields_ = [
@@ -212,4 +217,56 @@ class SYSTEM_PROCESS_INFORMATION(Structure):
 		("ImageName", UNICODE_STRING),
 		("BasePriority", ULONG),
 		("UniqueProcessId", PVOID),
+	]
+
+class SECURITY_DESCRIPTOR(Structure):
+    _pack_ = 1
+    _fields_ = [
+        ('Revision', BYTE),
+        ('Sbz1', BYTE),
+        ('Control', USHORT),
+        ('Owner', PVOID),
+        ('Group', PVOID),
+        ('Sacl', PVOID),
+        ('Dacl', PVOID),
+    ]
+ 
+class SECURITY_ATTRIBUTES(Structure):
+    _pack_ = 1
+    _fields_ = [
+        ('nLength', DWORD),
+        ('lpSecurityDescriptor', PVOID),
+        ('bInheritHandle', BYTE),
+    ]
+
+class SYSTEMTIME(Structure):
+    _pack_ = 1
+    _fields_ = [
+        ('wYear', WORD),
+        ('wMonth', WORD),
+        ('wDayOfWeek', WORD),
+        ('wDay', WORD),
+        ('wHour', WORD),
+        ('wMinute', WORD),
+        ('wSecond', WORD),
+        ('wMilliseconds', WORD),
+    ]
+
+class MEMORYSTATUSEX(Structure):
+	_fields_ = [
+		("dwLength",		DWORD),
+		("dwMemoryLoad",	DWORD),
+		("ullTotalPhys",	DWORDLONG),
+		("ullAvailPhys",	DWORDLONG),
+		("ullTotalPageFile",	DWORDLONG),
+		("ullAvailPageFile",	DWORDLONG),
+		("ullTotalVirtual",	DWORDLONG),
+		("ullAvailVirtual",	DWORDLONG),
+		("ullAvailExtendedVirtual",	DWORDLONG),
+	]
+
+class PDH_FMT_COUNTERVALUE(Structure):
+	_fields_ = [
+		("CStatus",		DWORD),
+		("doubleValue",		DOUBLE),
 	]

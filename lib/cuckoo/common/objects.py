@@ -57,6 +57,11 @@ class Dictionary(dict):
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
 
+class PCAP:
+    """PCAP base object."""
+    def __init__(self, file_path):
+        self.file_path = file_path
+
 class URL:
     """URL base object."""
 
@@ -508,10 +513,17 @@ class ProcDump(object):
             for map in self.address_space:
                 for chunk in map["chunks"]:
                     self.dumpfile.seek(chunk["offset"])
-                    match = re.findall(regex, self.dumpfile.read(chunk["end"] - chunk["start"]), flags)
-                    if match:
-                        matches.extend(match)
-                        result["detail"].append({"match": match, "chunk": chunk})
+                    match = re.finditer(regex, self.dumpfile.read(chunk["end"] - chunk["start"]), flags)
+                    thismatch = []
+                    try:
+                        while True:
+                            m = match.next()
+                            thismatch.append(m)
+                            matches.append(m.group(0))
+                    except StopIteration:
+                        pass
+                    if thismatch:
+                        result["detail"].append({"match": thismatch, "chunk": chunk})
             result["matches"] = matches
             return result
         else:

@@ -61,6 +61,8 @@ if enabledconf["elasticsearchdb"]:
          }],
          timeout = 60)
 
+maxsimilar = int(Config("reporting").malheur.maxsimilar)
+
 def get_analysis_info(db, id=-1, task=None):
     if not task:
         task = db.view_task(id)
@@ -68,7 +70,7 @@ def get_analysis_info(db, id=-1, task=None):
         return None
 
     new = task.to_dict()
-    if new["category"] == "file":
+    if new["category"] in ["file", "pcap"] and new["sample_id"] != None:
         new["sample"] = db.view_sample(new["sample_id"]).to_dict()
         filename = os.path.basename(new["target"])
         new.update({"filename": filename})
@@ -78,7 +80,7 @@ def get_analysis_info(db, id=-1, task=None):
                    {"info.id": int(new["id"])},
                    {
                        "info": 1, "virustotal_summary": 1,
-                       "info.custom":1, "info.shrike_msg":1, "malscore": 1, "malfamily": 1, 
+                       "info.custom":1, "info.shrike_msg":1, "malscore": 1, "malfamily": 1,
                        "network.pcap_sha256": 1,
                        "mlist_cnt": 1, "f_mlist_cnt": 1, "info.package": 1, "target.file.clamav": 1,
                        "suri_tls_cnt": 1, "suri_alert_cnt": 1, "suri_http_cnt": 1, "suri_file_cnt": 1
@@ -132,7 +134,7 @@ def get_analysis_info(db, id=-1, task=None):
         if rtmp.has_key("info") and rtmp["info"].has_key("package") and rtmp["info"]["package"]:
             new["package"] = rtmp["info"]["package"]
         if rtmp.has_key("target") and rtmp["target"].has_key("file") and rtmp["target"]["file"].has_key("clamav"):
-            new["clamav"] = rtmp["target"]["file"]["clamav"] 
+            new["clamav"] = rtmp["target"]["file"]["clamav"]
 
         if "display_shrike" in enabledconf and enabledconf["display_shrike"] and rtmp.has_key("info") and rtmp["info"].has_key("shrike_msg") and rtmp["info"]["shrike_msg"]:
             new["shrike_msg"] = rtmp["info"]["shrike_msg"]
@@ -154,22 +156,28 @@ def index(request, page=1):
 
     tasks_files = db.list_tasks(limit=TASK_LIMIT, offset=off, category="file", not_status=TASK_PENDING)
     tasks_urls = db.list_tasks(limit=TASK_LIMIT, offset=off, category="url", not_status=TASK_PENDING)
+    tasks_pcaps = db.list_tasks(limit=TASK_LIMIT, offset=off, category="pcap", not_status=TASK_PENDING)
     analyses_files = []
     analyses_urls = []
+    analyses_pcaps = []
 
     # Vars to define when to show Next/Previous buttons
     paging = dict()
     paging["show_file_next"] = "show"
     paging["show_url_next"] = "show"
+    paging["show_pcap_next"] = "show"
     paging["next_page"] = str(page + 1)
     paging["prev_page"] = str(page - 1)
 
     tasks_files_number = db.count_matching_tasks(category="file", not_status=TASK_PENDING)
     tasks_urls_number = db.count_matching_tasks(category="url", not_status=TASK_PENDING)
+    tasks_pcaps_number = db.count_matching_tasks(category="pcap", not_status=TASK_PENDING)
     pages_files_num = tasks_files_number / TASK_LIMIT + 1
     pages_urls_num = tasks_urls_number / TASK_LIMIT + 1
+    pages_pcaps_num = tasks_pcaps_number / TASK_LIMIT + 1
     files_pages = []
     urls_pages = []
+    pcaps_pages = []
     if pages_files_num < 11 or page < 6:
         files_pages = range(1, min(10, pages_files_num)+1)
     elif page > 5:
@@ -178,6 +186,10 @@ def index(request, page=1):
         urls_pages = range(1, min(10, pages_urls_num)+1)
     elif page > 5:
         urls_pages = range(min(page-5, pages_urls_num-10)+1, min(page + 5, pages_urls_num)+1)
+    if pages_pcaps_num < 11 or page < 6:
+        pcaps_pages = range(1, min(10, pages_pcaps_num)+1)
+    elif page > 5:
+        pcaps_pages = range(min(page-5, pages_pcaps_num-10)+1, min(page + 5, pages_pcaps_num)+1)
 
     # On a fresh install, we need handle where there are 0 tasks.
     buf = db.list_tasks(limit=1, category="file", not_status=TASK_PENDING, order_by="added_on asc")
@@ -192,6 +204,12 @@ def index(request, page=1):
         paging["show_url_prev"] = "show"
     else:
         paging["show_url_prev"] = "hide"
+    buf = db.list_tasks(limit=1, category="pcap", not_status=TASK_PENDING, order_by="added_on asc")
+    if len(buf) == 1:
+        first_pcap = db.list_tasks(limit=1, category="pcap", not_status=TASK_PENDING, order_by="added_on asc")[0].to_dict()["id"]
+        paging["show_pcap_prev"] = "show"
+    else:
+        paging["show_pcap_prev"] = "hide"
 
     if tasks_files:
         for task in tasks_files:
@@ -223,11 +241,27 @@ def index(request, page=1):
     else:
         paging["show_url_next"] = "hide"
 
+    if tasks_pcaps:
+        for task in tasks_pcaps:
+            new = get_analysis_info(db, task=task)
+            if new["id"] == first_pcap:
+                paging["show_pcap_next"] = "hide"
+            if page <= 1:
+                paging["show_pcap_prev"] = "hide"
+
+            if db.view_errors(task.id):
+                new["errors"] = True
+
+            analyses_pcaps.append(new)
+    else:
+        paging["show_pcap_next"] = "hide"
+
     paging["files_page_range"] = files_pages
     paging["urls_page_range"] = urls_pages
+    paging["pcaps_page_range"] = pcaps_pages
     paging["current_page"] = page
     return render_to_response("analysis/index.html",
-            {"files": analyses_files, "urls": analyses_urls,
+            {"files": analyses_files, "urls": analyses_urls, "pcaps": analyses_pcaps,
              "paging": paging, "config": enabledconf},
             context_instance=RequestContext(request))
 
@@ -396,7 +430,7 @@ def gen_moloch_from_suri_http(suricata):
             if e.has_key("hostname") and e["hostname"]:
                 e["moloch_http_host_url"] = settings.MOLOCH_BASE + "?date=-1&expression=host.http" + quote("\x3d\x3d\x22%s\x22" % (e["hostname"]),safe='')
             if e.has_key("uri") and e["uri"]:
-                e["moloch_http_uri_url"] = settings.MOLOCH_BASE + "?date=-1&expression=http.uri" + quote("\x3d\x3d\x22%s\x22" % (e["uri"]),safe='')
+                e["moloch_http_uri_url"] = settings.MOLOCH_BASE + "?date=-1&expression=http.uri" + quote("\x3d\x3d\x22%s\x22" % (e["uri"].encode("utf8")),safe='')
             if e.has_key("ua") and e["ua"]:
                 e["moloch_http_ua_url"] = settings.MOLOCH_BASE + "?date=-1&expression=http.user-agent" + quote("\x3d\x3d\x22%s\x22" % (e["ua"]),safe='')
             if e.has_key("method") and e["method"]:
@@ -466,7 +500,7 @@ def gen_moloch_from_antivirus(virustotal):
         for key in virustotal["scans"]:
             if virustotal["scans"][key]["result"]:
                  virustotal["scans"][key]["moloch"] = settings.MOLOCH_BASE + "?date=-1&expression=" + quote("tags\x3d\x3d\x22VT:%s:%s\x22" % (key,virustotal["scans"][key]["result"]),safe='')
-    return virustotal 
+    return virustotal
 
 @require_safe
 def surialert(request,task_id):
@@ -741,7 +775,7 @@ def report(request, task_id):
                             classes[classname].append(addval)
             if ourclassname:
                 similar = classes[ourclassname]
-                for sim in similar:
+                for sim in similar[:maxsimilar]:
                     siminfo = get_analysis_info(db, id=int(sim["id"]))
                     if siminfo:
                         similarinfo.append(siminfo)
@@ -786,6 +820,11 @@ def file(request, category, task_id, dlfile):
         path = os.path.join(CUCKOO_ROOT, "storage", "analyses",
                             task_id, "shots", file_name)
         cd = "image/jpeg"
+    elif category == "usage":
+        path = os.path.join(CUCKOO_ROOT, "storage", "analyses",
+                            task_id, "aux", "usage.svg")
+        file_name = "usage.svg"
+        cd = "image/svg+xml"
     elif category in extmap:
         file_name += extmap[category]
         path = os.path.join(CUCKOO_ROOT, "storage", "analyses",
@@ -797,11 +836,17 @@ def file(request, category, task_id, dlfile):
     elif category == "dropped":
         buf = os.path.join(CUCKOO_ROOT, "storage", "analyses",
                            task_id, "files", file_name)
-        # Grab smaller file name as we store guest paths in the
-        # [orig file name]_info.exe
-        dfile = min(os.listdir(buf), key=len)
-        path = os.path.join(buf, dfile)
-        file_name = dfile + ".bin"
+        if os.path.isdir(buf):
+            # Backward compat for when each dropped file was in a separate dir
+            # Grab smaller file name as we store guest paths in the
+            # [orig file name]_info.exe
+            dfile = min(os.listdir(buf), key=len)
+            path = os.path.join(buf, dfile)
+            file_name = dfile + ".bin"
+        else:
+            path = buf
+            file_name += ".bin"
+
     # Just for suricata dropped files currently
     elif category == "zip":
         file_name = "files.zip"
@@ -908,6 +953,7 @@ def filereport(request, task_id, category):
         "pdf": "report.pdf",
         "maec": "report.maec-4.1.xml",
         "metadata": "report.metadata.xml",
+        "misp": "misp.json"
     }
 
     if category in formats:
@@ -948,6 +994,7 @@ def full_memory_dump_file(request, analysis_number):
 @require_safe
 def full_memory_dump_strings(request, analysis_number):
     file_path = os.path.join(CUCKOO_ROOT, "storage", "analyses", str(analysis_number), "memory.dmp.strings")
+    filename = None
     if os.path.exists(file_path):
         filename = os.path.basename(file_path)
     else:
@@ -1039,7 +1086,7 @@ def perform_malscore_search(value):
     query_val =  {"$gte" : float(value)}
     if enabledconf["mongodb"]:
         return results_db.analysis.find({"malscore" : query_val}).sort([["_id", -1]])
-        
+
 def search(request):
     if "search" in request.POST:
         error = None
@@ -1177,7 +1224,7 @@ def pcapstream(request, task_id, conntuple):
 
     if enabledconf["mongodb"]:
         conndata = results_db.analysis.find_one({ "info.id": int(task_id) },
-            { "network.tcp": 1, "network.udp": 1},
+            { "network.tcp": 1, "network.udp": 1, "network.sorted_pcap_sha256": 1},
             sort=[("_id", pymongo.DESCENDING)])
 
     if enabledconf["elasticsearchdb"]:

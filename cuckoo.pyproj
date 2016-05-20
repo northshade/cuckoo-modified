@@ -119,6 +119,7 @@
     </Compile>
     <Compile Include="analyzer\windows\modules\auxiliary\browser.py" />
     <Compile Include="analyzer\windows\modules\auxiliary\digisig.py" />
+    <Compile Include="analyzer\windows\modules\auxiliary\usage.py" />
     <Compile Include="analyzer\windows\modules\packages\chrome.py" />
     <Compile Include="analyzer\windows\modules\packages\js.py" />
     <Compile Include="analyzer\windows\modules\packages\msg.py" />
@@ -129,6 +130,7 @@
     <Compile Include="analyzer\windows\modules\packages\msi.py" />
     <Compile Include="analyzer\windows\modules\packages\ppt.py" />
     <Compile Include="analyzer\windows\modules\packages\swf.py" />
+    <Compile Include="analyzer\windows\modules\packages\wsf.py" />
     <Compile Include="cuckoo.py" />
     <Compile Include="agent\agent.py" />
     <Compile Include="lib\cuckoo\common\decoders\alienspy.py">
@@ -203,10 +205,12 @@
     <Compile Include="lib\cuckoo\common\quarantine.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="lib\cuckoo\common\saztopcap.py" />
     <Compile Include="lib\__init__.py" />
     <Compile Include="modules\auxiliary\tor.py" />
     <Compile Include="modules\feeds\bad_ssl_certs.py" />
     <Compile Include="modules\feeds\__init__.py" />
+    <Compile Include="modules\processing\usage.py" />
     <Compile Include="modules\reporting\compression.py">
       <SubType>Code</SubType>
     </Compile>
@@ -241,6 +245,7 @@
     <Compile Include="utils\db_migration\versions\from_1_2_to_1_2-accuvant-add_statistics.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="utils\db_migration\versions\proper_indexes.py" />
     <Compile Include="utils\dist.py" />
     <Compile Include="utils\process.py" />
     <Compile Include="utils\listdump.py" />
@@ -413,6 +418,7 @@
     <Content Include="web\templates\analysis\network\_smtp.html" />
     <Content Include="web\templates\analysis\shrike.html" />
     <Content Include="web\templates\analysis\static\_dotnet.html" />
+    <Content Include="web\templates\analysis\static\_script.html" />
     <Content Include="web\templates\analysis\static\_java.html" />
     <Content Include="web\templates\analysis\static\_office.html" />
     <Content Include="web\templates\analysis\statistics\index.html" />
@@ -474,7 +480,6 @@
     <Content Include="web\templates\analysis\behavior\index.html" />
     <Content Include="web\templates\analysis\behavior\_chunk.html" />
     <Content Include="web\templates\analysis\behavior\_processes.html" />
-    <Content Include="web\templates\analysis\behavior\_tree_process.html" />
     <Content Include="web\templates\analysis\behavior\_tree.html" />
     <Content Include="web\templates\analysis\dropped\index.html" />
     <Content Include="web\templates\analysis\memory\index.html" />
