@@ -21,6 +21,7 @@ LANGUAGE_CODE = "en-us"
 
 ADMINS = (
     # ("Your Name", "your_email@example.com"),
+    ("Steve Clement", "steve.clement@circl.lu"),
 )
 
 MANAGERS = ADMINS

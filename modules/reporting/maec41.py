@@ -31,7 +31,7 @@ except ImportError as e:
     HAVE_CYBOX = False
 
 try:
-    from maec.bundle import (Bundle, MalwareAction, BundleReference, 
+    from maec.bundle import (Bundle, MalwareAction, BundleReference,
                              ProcessTree, AVClassification)
     from maec.package import MalwareSubject, Package, Analysis
     import maec.utils
@@ -90,7 +90,7 @@ class MAEC41Report(Report):
     def setupMAEC(self):
         """Generates MAEC Package, Malware Subject, and Bundle structure"""
         # Instantiate the Namespace class for automatic ID generation.
-        NS = Namespace("http://www.cuckoosandbox.org", "Cuckoosandbox")
+        NS = Namespace("http://www.cuckoosandbox.org", "Cuckoosandbox", "http://grouper.ieee.org/groups/malware/malwg/Schema1.1/metadataSharing.xsd")
         maec.utils.idgen.set_id_namespace(NS)
         # Setup the MAEC components
         if "target" in self.results and self.results["target"]["category"] == "file":

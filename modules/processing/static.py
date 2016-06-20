@@ -424,6 +424,7 @@ class PortableExecutable(object):
             try:
                 section = {}
                 section["name"] = convert_to_printable(entry.Name.strip("\x00"))
+                section["raw_address"] = "0x{0:08x}".format(entry.PointerToRawData)
                 section["virtual_address"] = "0x{0:08x}".format(entry.VirtualAddress)
                 section["virtual_size"] = "0x{0:08x}".format(entry.Misc_VirtualSize)
                 section["size_of_data"] = "0x{0:08x}".format(entry.SizeOfRawData)
@@ -740,12 +741,12 @@ class PortableExecutable(object):
         @return: analysis results dict or None.
         """
         if not os.path.exists(self.file_path):
-            return None
+            return {}
 
         try:
             self.pe = pefile.PE(self.file_path)
         except pefile.PEFormatError:
-            return None
+            return {}
 
         results = {}
         peresults = results["pe"] = { }
