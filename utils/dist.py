@@ -4,6 +4,7 @@
 # See the file 'docs/LICENSE' for copying permission.
 
 import os
+import shutil
 import sys
 import time
 import json
@@ -39,6 +40,12 @@ try:
     HAVE_MONGO = True
 except ImportError:
     HAVE_MONGO = False
+
+try:
+    from elasticsearch import Elasticsearch
+    HAVE_ELASTICSEARCH = True
+except ImportError as e:
+    HAVE_ELASTICSEARCH = False
 
 # we need original db to reserve ID in db,
 # to store later report, from master or slave
@@ -107,6 +114,11 @@ class Retriever(object):
 
     def starter(self):
         """ Method that runs forever """
+        with app.app_context():
+            tasks = Task.query.filter_by(retrieved=False, finished=True).all()
+            for task in tasks:
+                self.queue.put((task.id, task.task_id, task.node_id, task.main_task_id))
+
         threads = []
         while True:
             if not self.queue.empty() and len(threads) < self.threads_number:
@@ -173,7 +185,7 @@ class Retriever(object):
                               "dist", task.task_id)
 
             except Exception as e:
-                logging.info(e)
+                logging.info("Can not fetch dist2 report for Web Task: main_task_id: %d. Error: %s" % (main_task_id, e))
 
         return
 
@@ -461,6 +473,44 @@ class StatusThread(threading.Thread):
             for task in q.limit(pend_tasks_num).all():
                 node.submit_task(task)
 
+    def do_es(self, results, t):
+        if HAVE_ELASTICSEARCH:
+            try:
+                es = Elasticsearch(
+                    hosts = [{
+                        'host': reporting_conf.elasticsearchdb.host,
+                        'port': reporting_conf.elasticsearchdb.port,
+                    }],
+                    timeout = 60
+                )
+            except Exception as e: 
+                logging.error("Cannot connect to ElasticSearch DB")
+                return
+
+            try:
+                index_prefix  = reporting_conf.elasticsearchdb.index
+
+                idxdate = results["info"]["started"].split(" ")[0]
+                index_name = '{0}-{1}'.format(index_prefix, idxdate)
+            except Exception as e:
+                log.info("Failed to set ES index: %s" % e)
+
+            try:
+                report = {}
+                report["task_id"] = t.main_task_id
+                report["info"]    = results.get("info")
+                report["target"]  = results.get("target")
+                report["summary"] = results.get("behavior", {}).get("summary")
+                report["network"] = results.get("network")
+                report["virustotal"] = results.get("virustotal")
+                report["virustotal_summary"] = "%s/%s" % ( results.get("virustotal", {}).get("positives") , \
+                                                           results.get("virustotal", {}).get("total") )
+            except Exception as e:
+                log.info("Failed to create ES entry: %s" % e)
+
+            # Store the report and retrieve its object id.
+            es.index(index=index_name, doc_type="analysis", id=t.main_task_id, body=report)
+
     def do_mongo(self, report_mongo, report, t, node):
 
         """This fucntion will store behavior and webgui report without reprocess"""
@@ -582,6 +632,8 @@ class StatusThread(threading.Thread):
 
                             if report_mongo and report:
                                 self.do_mongo(report_mongo, report, t, node)
+                                if reporting_conf.elasticsearchdb.searchonly and reporting_conf.elasticsearchdb.enabled: 
+                                    self.do_es(report, t)
                                 finished = True
                                 
                                 # move file here from slaves
@@ -596,18 +648,17 @@ class StatusThread(threading.Thread):
 
                                     destination = os.path.join(destination, sample_sha256)
                                     if not os.path.exists(destination):
-                                        os.rename(t.path, destination)
-                                    os.remove(t.path)
+                                        shutil.move(t.path, destination)
                                     # creating link to analysis folder
                                     os.symlink(destination, os.path.join(report_path, "binary"))
                                 except Exception as e:
-                                        logging.error(e)
+                                    logging.error(e)
 
                         # closing StringIO objects
                         fileobj.close()
 
                     except Exception as e:
-                        log.info(e)
+                        log.info("Exception: %s" % e)
 
                 del temp_f
 
@@ -771,6 +822,9 @@ class NodeRootApi(NodeBaseApi):
         node = Node(name=args["name"], url=args["url"], ht_user=args["ht_user"],
                 ht_pass=args["ht_pass"])
 
+        if Node.query.filter_by(name=args["name"]).first():
+            return dict(success=False, message="Node called %s already exists" % args["name"])
+
         machines = []
         for machine in node.list_machines():
             machines.append(dict(
@@ -909,12 +963,6 @@ class DistRestApi(RestApi):
             "application/json": output_json,
         }
 
-def check_pending_retrieves(app):
-    with app.app_context():
-        tasks = Task.query.filter_by(retrieved=False, finished=True).all()
-        for task in tasks:
-            retrieve.queue.put((task.id, task.task_id, task.node_id, task.main_task_id))
-
 def update_machine_table(app, node_name):
     with app.app_context():
         node = Node.query.filter_by(name=node_name).first()
@@ -977,6 +1025,7 @@ def create_app(database_connection):
     return app
 
 # init 
+logging.getLogger("elasticsearch").setLevel(logging.WARNING)
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 log = logging.getLogger("cuckoo.distributed")
@@ -1030,9 +1079,6 @@ if __name__ == "__main__":
         t.daemon = True
         t.start()
 
-        # will generate queue with all pend retrieve tasks
-        check_pending_retrieves(app)
-
         app.run(host=args.host, port=args.port)
 
     else:
@@ -1051,6 +1097,3 @@ else:
     t = StatusThread()
     t.daemon = True
     t.start()
-
-    # will generate queue with all pend retrieve tasks
-    check_pending_retrieves(app)
