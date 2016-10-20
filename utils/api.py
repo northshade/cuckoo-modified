@@ -26,6 +26,7 @@ from lib.cuckoo.common.config import Config
 from lib.cuckoo.common.constants import CUCKOO_VERSION, CUCKOO_ROOT
 from lib.cuckoo.common.utils import store_temp_file, delete_folder
 from lib.cuckoo.common.email_utils import find_attachments_in_email
+from lib.cuckoo.common.exceptions import CuckooDemuxError
 from lib.cuckoo.core.database import Database, TASK_RUNNING, Task
 
 # Global DB pointer.
@@ -79,23 +80,32 @@ def tasks_create_file():
     platform = request.forms.get("platform", "")
     tags = request.forms.get("tags", None)
     custom = request.forms.get("custom", "")
-    memory = request.forms.get("memory", False)
+    memory = request.forms.get("memory", 'False')
     clock = request.forms.get("clock", None)
     shrike_url = request.forms.get("shrike_url", None)
     shrike_msg = request.forms.get("shrike_msg", None)
     shrike_sid = request.forms.get("shrike_sid", None)
     shrike_refer = request.forms.get("shrike_refer", None)
 
-    if int(memory):
+    if memory.upper() == 'FALSE' or memory == '0':
+        memory = False
+    else:
         memory = True
-    enforce_timeout = request.forms.get("enforce_timeout", False)
-    if int(enforce_timeout):
+
+    enforce_timeout = request.forms.get("enforce_timeout", 'False')
+    if enforce_timeout.upper() == 'FALSE' or enforce_timeout == '0':
+        enforce_timeout = False
+    else:
         enforce_timeout = True
 
     temp_file_path = store_temp_file(data.file.read(), data.filename)
-    task_ids = db.demux_sample_and_add_to_db(file_path=temp_file_path, package=package, timeout=timeout, options=options, priority=priority,
-                                          machine=machine, platform=platform, custom=custom, memory=memory, enforce_timeout=enforce_timeout, tags=tags, clock=clock,
-                                          shrike_url=shrike_url, shrike_msg=shrike_msg, shrike_sid=shrike_sid, shrike_refer=shrike_refer)
+    try:
+        task_ids = db.demux_sample_and_add_to_db(file_path=temp_file_path, package=package, timeout=timeout, options=options, priority=priority,
+                machine=machine, platform=platform, custom=custom, memory=memory, enforce_timeout=enforce_timeout, tags=tags, clock=clock,
+                shrike_url=shrike_url, shrike_msg=shrike_msg, shrike_sid=shrike_sid, shrike_refer=shrike_refer)
+    except CuckooDemuxError as e:
+        return HTTPError(500, e)
+
     response["task_ids"] = task_ids
     return jsonize(response)
 
