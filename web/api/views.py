@@ -857,7 +857,7 @@ def ext_tasks_search(request):
             elif option == "signame":
                 records = results_db.analysis.find({"signatures.name": {"$regex": dataarg, "$options": "-i"}}).sort([["_id", -1]])
             elif option == "malfamily":
-                records = results_db.analysis.find({"malfamily": {"$regex": value, "$options": "-i"}}).sort([["_id", -1]])
+                records = results_db.analysis.find({"malfamily": {"$regex": dataarg, "$options": "-i"}}).sort([["_id", -1]])
             elif option == "url":
                 records = results_db.analysis.find({"target.url": dataarg}).sort([["_id", -1]])
             elif option == "iconhash":
@@ -1242,7 +1242,7 @@ def tasks_report(request, task_id, report_format="json"):
             elif report_format == "maec" or report_format == "metadata":
                 content = "text/xml"
                 ext = "xml"
-            elif export_format == "pdf":
+            elif report_format == "pdf":
                 content = "application/pdf"
                 ext = "pdf"
             fname = "%s_report.%s" % (task_id, ext)
@@ -1760,7 +1760,7 @@ def tasks_procmemory(request, task_id, pid="all"):
         resp = {"error": True, "error_value": "Method not allowed"}
         return jsonize(resp, response=True)
 
-    if not apiconf.procmemory.get("enabled"):
+    if not apiconf.taskprocmemory.get("enabled"):
         resp = {"error": True,
                 "error_value": "Process memory download API is disabled"}
         return jsonize(resp, response=True)
