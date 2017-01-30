@@ -40,3 +40,8 @@ auxiliary.conf-*
 memory.conf-*
 processing.conf-*
 reporting.conf-*
+# Ignore Django auth DB
+web/siteauth.sqlite
+
+# Ignore feeds
+data/feeds/*
