@@ -68,7 +68,7 @@ def choose_package(file_type, file_name, exports):
         return "html"
     elif file_name.endswith(".hta"):
         return "hta"
-    elif file_name.endswith(".wsf") or file_type == "XML document text":
+    elif ( "XML DOCUMENT" in file_type.upper() or "HTML DOCUMENT" in file_type.upper() or "DATA" in file_type.upper() ) and "wsf" in file_name:
         return "wsf"
     elif "HTML" in file_type:
         return "html"
