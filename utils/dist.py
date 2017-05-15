@@ -12,6 +12,7 @@ jdec = json.JSONDecoder()
 
 import hashlib
 import logging
+logging.basicConfig()
 import tarfile
 import tempfile
 import argparse
@@ -134,11 +135,14 @@ class Retriever(object):
                     else:
                         last_check = 0
 
+                    # Fetch 10 tasks per node
+                    cnt_tasks = 0
                     for task in node.fetch_tasks("reported", since=last_check):
-                        if len(threads_fetcher) < self.threads_number:
+                        if len(threads_fetcher) < self.threads_number and cnt_tasks < 10:
                             thread = threading.Thread(target=self.fetch_latest_reports, args=(task, node))
                             thread.start()
                             threads_fetcher.append(thread)
+                            cnt_tasks += 1
 
                         else:
                             for thread in threads_fetcher:
@@ -174,7 +178,6 @@ class Retriever(object):
 
         with app.app_context():
             try:
-                log.debug(task)
                 finished = False
                 q = Task.query.filter_by(node_id=node.id, task_id=task["id"], finished=False)
                 # In the case that a Cuckoo node has been reset over time it's
@@ -185,12 +188,15 @@ class Retriever(object):
                 if t is None:
                     tf = Task.query.filter_by(retrieved=False, finished=True).order_by(Task.id.asc()).first()
                     if tf is not None and tf.finished:
-                        log.debug("addding to dist2 retriever")
                         if (tf.id, tf.task_id, tf.node_id, tf.main_task_id) not in self.queue.queue:
+                            log.debug("adding to dist2 retriever: {}".format(task))
                             self.queue.put((tf.id, tf.task_id, tf.node_id, tf.main_task_id))
+                        #else:
+                        #    self.remove_from_slave(None, node, task.get("id"))
                     else:
                         # sometime it not deletes tasks in slaves of some fails or something
                         # this will do the trick
+                        log.debug("time to remove")
                         self.remove_from_slave(None, node, task.get("id"))
                     return
                 log.debug("Going to fetch dist report for: {}".format(t.task_id))
@@ -301,25 +307,37 @@ class Retriever(object):
                     t = q.first()
                     if t:
                         t.retrieved = True
-
                         db.session.commit()
                         db.session.refresh(t)
                         self.remove_from_slave(t)
 
-
+                elif report and report.status_code == 500:
+                    with app.app_context():
+                        q = Task.query.filter_by(node_id=node_id, task_id=task_id, finished=False)
+                        t = q.order_by(Task.id.desc()).first()
+                        t = Task.query.get(task_id)
+                        if t is not None:
+                            t.retrieved = True
+                            t.finished = True
+                            db.session.commit()
+                            db.session.refresh(t)
+                        self.remove_from_slave(t)
                 else:
                     log.debug("Error fetching %s report for task #%d",
                               "dist2", task_id)
 
             except Exception as e:
-                logging.info("Can not fetch dist2 report for Web Task: main_task_id: %d. Error: %s" % (main_task_id, e))
-                if e == "404: Not Found":
-                    t.retrieved = True
-                    t.finished = True
-                    db.session.commit()
-                    db.session.refresh(t)
+                log.info("Can not fetch dist2 report for Web Task: main_task_id: %d. Error: %s" % (main_task_id, e))
+                with app.app_context():
+                    q = Task.query.filter_by(node_id=node_id, task_id=task_id, finished=False)
+                    t = q.order_by(Task.id.desc()).first()
+                    t = Task.query.get(task_id)
+                    if t is not None:
+                        t.retrieved = True
+                        t.finished = True
+                        db.session.commit()
+                        db.session.refresh(t)
                     self.remove_from_slave(t)
-
 
         return
 
@@ -335,7 +353,7 @@ class Retriever(object):
             if node:
                 try:
                     url = os.path.join(node.url, "tasks", "delete", "%d" % task_id)
-                    logging.info("Removing task id: {0} - from node: {1}".format(task_id, node.name))
+                    log.info("Removing task id: {0} - from node: {1}".format(task_id, node.name))
                     return requests.get(url,
                                         auth = HTTPBasicAuth(node.ht_user, node.ht_pass),
                                         verify = False).status_code == 200
@@ -354,7 +372,7 @@ class Retriever(object):
                     timeout = 60
                 )
             except Exception as e:
-                logging.error("Cannot connect to ElasticSearch DB")
+                log.error("Cannot connect to ElasticSearch DB")
                 return
 
             try:
@@ -513,7 +531,7 @@ class Node(db.Model):
 
         return {}
 
-    def submit_task(self, task):
+    def submit_task(self, task, node):
         try:
             url = os.path.join(self.url, "tasks", "create", "file")
 
@@ -533,6 +551,7 @@ class Node(db.Model):
             # to the next file.
             if not os.path.isfile(task.path):
                 task.finished = True
+                task.retrieved = True
                 db.session.commit()
                 db.session.refresh(task)
                 return
@@ -547,7 +566,15 @@ class Node(db.Model):
                 if r and r.status_code == 200 and "task_ids" in r.json() and len(r.json()["task_ids"]) > 0:
                     task.task_id = r.json()["task_ids"][0]
                     log.info("Submitted task to slave: {}".format(task.task_id))
+                elif r.status_code == 500:
+                    log.info("Failed submission to node: {} of {}, status code: {}".format(node.name, task.path, r.status_code))
+                    task.finished = True
+                    task.retrieved = True
+                    db.session.commit()
+                    db.session.refresh(task)
+                    return
                 else:
+                    log.info("Task submit to slave failed: {} - {}".format(r.status_code, r.content))
                     return
 
             task.node_id = self.id
@@ -725,7 +752,7 @@ class StatusThread(threading.Thread):
         # Submit appropriate tasks to node
         if pend_tasks_num > 0:
             for task in q.limit(pend_tasks_num).all():
-                node.submit_task(task)
+                node.submit_task(task, node)
 
     def run(self):
 
@@ -801,6 +828,8 @@ class StatusThread(threading.Thread):
                         self.submit_tasks(node, MINIMUMQUEUE[node.name] - status["pending"])
                     elif statuses.get("master", {}).get("pending", 0) > MINIMUMQUEUE.get("master", 0) and \
                          status["pending"] < MINIMUMQUEUE[node.name]:
+
+                        print "submit time", node.name, statuses.get("master", {}).get("pending", 0), MINIMUMQUEUE[node.name], MINIMUMQUEUE.get("master", 0), MINIMUMQUEUE[node.name] - status["pending"]
                         self.submit_tasks(node, MINIMUMQUEUE[node.name] - status["pending"])
 
                     if node.last_check:
@@ -976,7 +1005,6 @@ class ReportApi(ReportingBaseApi):
     def get(self, task_id, report="json", stream=False, raw=False):
         task = Task.query.get(task_id)
         url,ht_user,ht_pass = self.get_node(task.node_id)
-
         if not task:
             abort(404, message="Task not found")
 
@@ -985,11 +1013,15 @@ class ReportApi(ReportingBaseApi):
 
         if self.report_formats[report]:
             res = self.get_report(url, ht_user, ht_pass, task.task_id, report, stream)
+
             if res and res.status_code == 200:
                 if raw:
                     return res
                 else:
                     return res.json()
+            elif res and res.status_code == 500:
+               if raw:
+                    return res
             else:
                 abort(404, message="Report format not found")
 
@@ -1099,7 +1131,6 @@ def create_app(database_connection):
 logging.getLogger("elasticsearch").setLevel(logging.WARNING)
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
-log = logging.getLogger("cuckoo.distributed")
 
 app = create_app(database_connection=reporting_conf.distributed.db)
 
@@ -1123,7 +1154,7 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
-
+    log = logging.getLogger(__name__)
     if args.node:
         if args.delete_vm:
             delete_vm_on_node(app, args.node, args.delete_vm)
@@ -1156,6 +1187,7 @@ if __name__ == "__main__":
         p.error("Configure conf/reporting.conf distributed section please")
 else:
     # this allows run it with gunicorn/uwsgi
+    log = logging.getLogger(__name__)
     log.setLevel(logging.DEBUG)
     if not os.path.isdir(reporting_conf.distributed.samples_directory):
         os.makedirs(reporting_conf.distributed.samples_directory)
