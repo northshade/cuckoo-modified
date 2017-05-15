@@ -18,6 +18,7 @@ from datetime import datetime
 from lib.cuckoo.common.config import Config
 from lib.cuckoo.common.abstracts import Report
 from lib.cuckoo.common.constants import CUCKOO_ROOT
+from tldextract import extract
 
 PYMISP = False
 try:
@@ -74,24 +75,24 @@ class MISP(Report):
         comment = "{} {}{}".format(self.options.get("title", ""), results.get('info', {}).get('id'), malfamily)
         
 
-        if results.get("target", {}).get("url", "") and results["target"]["url"] not in whitelist:                      
+        if results.get("target", {}).get("url", "") and extract(results["target"]["url"]).registered_domain not in whitelist:                      
             iocs.append({"uri": results["target"]["url"]})
-            filtered_iocs.append(results["target"]["url"])
+            filtered_iocs.append(extract(results["target"]["url"]).registered_domain)
 
         if self.options.get("network", False) and "network" in results.keys():
             for block in results["network"].get("hosts", []):
-                if block.get("hostname", "") and (block["hostname"] not in whitelist and block["hostname"] not in filtered_iocs):
+                if block.get("hostname", "") and (extract(block["hostname"]).registered_domain not in whitelist and extract(block["hostname"]).registered_domain not in filtered_iocs):
                     iocs.append({"domain": block["hostname"]})
-                    filtered_iocs.append(block["hostname"])
+                    filtered_iocs.append(extract(block["hostname"]).registered_domain)
                 if block.get("ip", "") and (block["ip"] not in whitelist and block["ip"] not in filtered_iocs):
                     iocs.append({"ip": block["ip"]})
                     filtered_iocs.append(block["ip"])
 
             for req in results["network"].get("http", []):
-                if "uri" in req and req["uri"] not in whitelist:
-                    if req["uri"] not in filtered_iocs:
+                if "uri" in req and extract(req["uri"]).registered_domain not in whitelist: 
+                    if extract(req["uri"]).registered_domain not in filtered_iocs:
                         iocs.append({"uri": req["uri"]})
-                        filtered_iocs.append(req["uri"])
+                        filtered_iocs.append(extract(req["uri"]).registered_domain)
                     if "user-agent" in req and req["user-agent"] not in filtered_iocs:
                         iocs.append({"ua": req["user-agent"]})
                         filtered_iocs.append(req["user-agent"])
@@ -133,7 +134,8 @@ class MISP(Report):
             event = self.misp.new_event(distribution, threat_level_id, analysis, comment, date=datetime.now().strftime('%Y-%m-%d'), published=True)
 
             # Add Payload delivery hash about the details of the analyzed file
-            self.misp.add_hashes(event, category='Payload delivery',
+            if results.get('target',{}).get('file',{}).get('name', ''):
+                self.misp.add_hashes(event, category='Payload delivery',
                                         filename=results.get('target').get('file').get('name'),
                                         md5=results.get('target').get('file').get('md5'),
                                         sha1=results.get('target').get('file').get('sha1'),
