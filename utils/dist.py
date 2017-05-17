@@ -102,8 +102,9 @@ except ImportError:
 
 class Retriever(object):
 
-    def __init__(self, queue, threads_number, app):
-        self.queue = queue
+    def __init__(self, threads_number, app):
+        self.queue = Queue.Queue()
+        self.cleaner_queue = Queue.Queue()
         self.threads_number = threads_number
 
     # need to add monitoring for this is isAlive
@@ -115,6 +116,19 @@ class Retriever(object):
         thread = threading.Thread(target=self.fetcher, args=())
         thread.daemon = True
         thread.start()
+
+        thread = threading.Thread(target=self.cleaner, args=())
+        thread.daemon = True
+        thread.start()
+
+    def cleaner(self):
+        """ Method that runs forever """
+        with app.app_context():
+            threads_fetcher = []
+            while True:
+                if not self.cleaner_queue.empty():
+                    node, task_id = self.cleaner_queue.get()
+                    self.remove_from_slave(node, task_id)
 
     def fetcher(self):
         """ Method that runs forever """
@@ -149,6 +163,7 @@ class Retriever(object):
                                 if not thread.isAlive():
                                     thread.join()
                                     threads_fetcher.remove(thread)
+
     def starter(self):
         """ Method that runs forever """
         with app.app_context():
@@ -192,12 +207,13 @@ class Retriever(object):
                             log.debug("adding to dist2 retriever: {}".format(task))
                             self.queue.put((tf.id, tf.task_id, tf.node_id, tf.main_task_id))
                         #else:
-                        #    self.remove_from_slave(None, node, task.get("id"))
+                             #if not (node.id, task.get("id")) in self.cleaner_queue.queue:
+                                #self.cleaner_queue.put((node.id, task.get("id")))
                     else:
                         # sometime it not deletes tasks in slaves of some fails or something
                         # this will do the trick
-                        log.debug("time to remove")
-                        self.remove_from_slave(None, node, task.get("id"))
+                        if not (node.id, task.get("id")) in self.cleaner_queue.queue:
+                            self.cleaner_queue.put((node.id, task.get("id")))
                     return
                 log.debug("Going to fetch dist report for: {}".format(t.task_id))
                 # Fetch each requested report.
@@ -309,7 +325,8 @@ class Retriever(object):
                         t.retrieved = True
                         db.session.commit()
                         db.session.refresh(t)
-                        self.remove_from_slave(t)
+                        if not (t.node_id, t.task_id) in self.cleaner_queue.queue:
+                            self.cleaner_queue.put((t.node_id, t.task_id))
 
                 elif report and report.status_code == 500:
                     with app.app_context():
@@ -321,7 +338,8 @@ class Retriever(object):
                             t.finished = True
                             db.session.commit()
                             db.session.refresh(t)
-                        self.remove_from_slave(t)
+                        if not (t.node_id, t.task_id) in self.cleaner_queue.queue:
+                            self.cleaner_queue.put((t.node_id, t.task_id))
                 else:
                     log.debug("Error fetching %s report for task #%d",
                               "dist2", task_id)
@@ -337,29 +355,27 @@ class Retriever(object):
                         t.finished = True
                         db.session.commit()
                         db.session.refresh(t)
-                    self.remove_from_slave(t)
+                    if not (t.node_id, t.task_id) in self.cleaner_queue.queue:
+                        self.cleaner_queue.put((t.node_id, t.task_id))
 
         return
 
-    def remove_from_slave(self, t, node = False, task_id = False):
+    def remove_from_slave(self, node_id, task_id):
         # Delete the task and all its associated files.
         # (It will still remain in the nodes' database, though.)
         if reporting_conf.distributed.remove_task_on_slave:
-            if node is False:
-                node = Node.query.filter_by(id = t.node_id)
-                node = node.first()
-            if task_id is False:
-                task_id = t.task_id
+            node = Node.query.filter_by(id = int(node_id))
+            node = node.first()
             if node:
                 try:
                     url = os.path.join(node.url, "tasks", "delete", "%d" % task_id)
                     log.info("Removing task id: {0} - from node: {1}".format(task_id, node.name))
-                    return requests.get(url,
-                                        auth = HTTPBasicAuth(node.ht_user, node.ht_pass),
-                                        verify = False).status_code == 200
+                    res = requests.get(url,auth = HTTPBasicAuth(node.ht_user, node.ht_pass),
+                                        verify = False)
+                    if res and res.status_code != 200:
+                        print res.status_code, res.content
                 except Exception as e:
-                    log.critical("Error deleting task (task #%d, node %s): %s",
-                                    task_id, node.name, e)
+                    log.critical("Error deleting task (task #%d, node %s): %s", task_id, node.name, e)
 
     def do_es(self, results, t):
         if HAVE_ELASTICSEARCH:
@@ -755,8 +771,6 @@ class StatusThread(threading.Thread):
                 node.submit_task(task, node)
 
     def run(self):
-
-        global queue
         global main_db
         global retrieve
         global STATUSES
@@ -792,7 +806,7 @@ class StatusThread(threading.Thread):
         if reporting_conf.distributed.dead_count:
             dead_count = reporting_conf.distributed.dead_count
 
-        retrieve = Retriever(queue, threads_number, app)
+        retrieve = Retriever(threads_number, app)
         retrieve.background()
         statuses = {}
         while RUNNING:
@@ -1136,7 +1150,6 @@ app = create_app(database_connection=reporting_conf.distributed.db)
 
 RUNNING, STATUSES = True, {}
 main_db = Database()
-queue = Queue.Queue()
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
