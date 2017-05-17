@@ -186,8 +186,8 @@ class Pcap:
 
         if self.config.processing.reverse_dns:
             d = dns.resolver.Resolver()
-            d.timeout = 5.0
-            d.lifetime = 5.0
+            d.timeout = 0.3
+            d.lifetime = 0.3
 
         while unique_hosts:
             ip = unique_hosts.pop()
