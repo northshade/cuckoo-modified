@@ -32,7 +32,7 @@ sys.path.append(CUCKOO_ROOT)
 from lib.cuckoo.common.config import Config
 from lib.cuckoo.common.utils import store_temp_file
 from lib.cuckoo.common.exceptions import CuckooReportError
-from lib.cuckoo.core.database import Database, TASK_COMPLETED, TASK_REPORTED, TASK_RUNNING, TASK_PENDING
+from lib.cuckoo.core.database import Database, TASK_COMPLETED, TASK_REPORTED, TASK_RUNNING, TASK_PENDING, TASK_FAILED_REPORTING
 
 # ElasticSearch not included, as it not officially maintained
 try:
@@ -60,6 +60,8 @@ RESET_LASTCHECK = 20
 failed_count = dict()
 # status controler count to reset number
 status_count = dict()
+
+lock_retriever = threading.Lock()
 
 def required(package):
     sys.exit("The %s package is required: pip install %s" %
@@ -212,15 +214,27 @@ class Retriever(object):
                     else:
                         # sometime it not deletes tasks in slaves of some fails or something
                         # this will do the trick
+                        lock_retriever.acquire()
                         if not (node.id, task.get("id")) in self.cleaner_queue.queue:
                             self.cleaner_queue.put((node.id, task.get("id")))
+                        lock_retriever.release()
                     return
-                log.debug("Going to fetch dist report for: {}".format(t.task_id))
+                log.debug("Fetching dist report for: id: {}, task_id: {}, main_task_id:{} from node_id: {}".format(t.id, t.task_id, t.main_task_id, t.node_id))
                 # Fetch each requested report.
                 report = node.get_report(t.task_id, "dist", stream=True)
                 if report is None or report.status_code != 200:
                     log.debug("Error fetching %s report for task #%d",
                                 "distributed", t.task_id)
+                    t.finished = True
+                    t.retrieved = True
+                    db.session.commit()
+                    db.session.refresh(t)
+                    lock_retriever.acquire()
+                    if not (t.node_id, t.task_id) in self.cleaner_queue.queue:
+                        self.cleaner_queue.put((t.node_id, t.task_id))
+                    lock_retriever.release()
+                    main_db.set_status(t.main_task_id, TASK_FAILED_REPORTING)
+
                     return
                 temp_f = ''
                 for chunk in report.iter_content(chunk_size=1024*1024):
@@ -322,41 +336,44 @@ class Retriever(object):
                     q = Task.query.filter_by(node_id=node_id, task_id=task_id, finished=True)
                     t = q.first()
                     if t:
+                        log.info("Dist2 report was retrieved for task_id {}, from node_id: {}, where main_task_id: {}".format(task_id, node_id, main_task_id))
                         t.retrieved = True
                         db.session.commit()
                         db.session.refresh(t)
+                        lock_retriever.acquire()
                         if not (t.node_id, t.task_id) in self.cleaner_queue.queue:
                             self.cleaner_queue.put((t.node_id, t.task_id))
-
-                elif report and report.status_code == 500:
+                        lock_retriever.release()
+                else:
+                    log.debug("Error fetching dist2 report for task {}".format(task_id))
                     with app.app_context():
-                        q = Task.query.filter_by(node_id=node_id, task_id=task_id, finished=False)
-                        t = q.order_by(Task.id.desc()).first()
-                        t = Task.query.get(task_id)
+                        log.info("Dist2 report retring failed for task_id {}, from node_id: {}, where main_task_id: {}".format(task_id, node_id, main_task_id))
+                        t = Task.query.filter_by(node_id=node_id, task_id=task_id, finished=True).order_by(Task.id.desc()).first()
                         if t is not None:
                             t.retrieved = True
                             t.finished = True
                             db.session.commit()
                             db.session.refresh(t)
-                        if not (t.node_id, t.task_id) in self.cleaner_queue.queue:
-                            self.cleaner_queue.put((t.node_id, t.task_id))
-                else:
-                    log.debug("Error fetching %s report for task #%d",
-                              "dist2", task_id)
+                            lock_retriever.acquire()
+                            if not (t.node_id, t.task_id) in self.cleaner_queue.queue:
+                                self.cleaner_queue.put((t.node_id, t.task_id))
+                            lock_retriever.release()
 
             except Exception as e:
-                log.info("Can not fetch dist2 report for Web Task: main_task_id: %d. Error: %s" % (main_task_id, e))
+                log.info("Can not fetch dist2 report for Web Task: id:{}, task_id:{}, node_id:{}, main_task_id: {}. Error: {}".format(dist_id, task_id, node_id, main_task_id, e))
                 with app.app_context():
-                    q = Task.query.filter_by(node_id=node_id, task_id=task_id, finished=False)
-                    t = q.order_by(Task.id.desc()).first()
-                    t = Task.query.get(task_id)
+                    t = Task.query.filter_by(node_id=node_id, task_id=task_id, finished=True).order_by(Task.id.desc()).first()
+                    #t = q.order_by(Task.id.desc()).first()
                     if t is not None:
+                        log.info("Mark as finished and retrieved task: {}".format(t.id))
                         t.retrieved = True
                         t.finished = True
                         db.session.commit()
                         db.session.refresh(t)
-                    if not (t.node_id, t.task_id) in self.cleaner_queue.queue:
-                        self.cleaner_queue.put((t.node_id, t.task_id))
+                        lock_retriever.acquire()
+                        if not (t.node_id, t.task_id) in self.cleaner_queue.queue:
+                            self.cleaner_queue.put((t.node_id, t.task_id))
+                        lock_retriever.release()
 
         return
 
@@ -373,7 +390,7 @@ class Retriever(object):
                     res = requests.get(url,auth = HTTPBasicAuth(node.ht_user, node.ht_pass),
                                         verify = False)
                     if res and res.status_code != 200:
-                        print res.status_code, res.content
+                        log.info("{} - {}".format(res.status_code, res.content))
                 except Exception as e:
                     log.critical("Error deleting task (task #%d, node %s): %s", task_id, node.name, e)
 
@@ -738,32 +755,34 @@ class StatusThread(threading.Thread):
         # Order by task priority and task id.
         q = q.order_by(-Task.priority, Task.main_task_id)
 
-        # Get available node tags
-        machines = Machine.query.filter_by(node_id=node.id).all()
+        print reporting_conf.distributed.tags
+        if reporting_conf.distributed.enable_tags:
+            # Get available node tags
+            machines = Machine.query.filter_by(node_id=node.id).all()
 
-        # Get available tag combinations
-        ta = set()
-        for m in machines:
-            for i in xrange(1, len(m.tags)+1):
-                for t in combinations(m.tags, i):
-                    ta.add(','.join(t))
-        ta = list(ta)
+            # Get available tag combinations
+            ta = set()
+            for m in machines:
+                for i in xrange(1, len(m.tags)+1):
+                    for t in combinations(m.tags, i):
+                        ta.add(','.join(t))
+            ta = list(ta)
 
-        # Create filter query from tasks in ta
-        tags = [ getattr(Task, "tags")=="" ]
-        for t in ta:
-            if len(t.split(',')) == 1:
-                tags.append(getattr(Task, "tags")==(t+','))
-            else:
-                t = t.split(',')
-                # ie. LIKE '%,%,%,'
-                t_combined = [ getattr(Task, "tags").like("%s" % ('%,'*len(t)) ) ]
-                for tag in t:
-                    t_combined.append(getattr(Task, "tags").like("%%%s%%" % (tag+',') ))
-                tags.append( and_(*t_combined) )
+            # Create filter query from tasks in ta
+            tags = [ getattr(Task, "tags")=="" ]
+            for t in ta:
+                if len(t.split(',')) == 1:
+                    tags.append(getattr(Task, "tags")==(t+','))
+                else:
+                    t = t.split(',')
+                    # ie. LIKE '%,%,%,'
+                    t_combined = [ getattr(Task, "tags").like("%s" % ('%,'*len(t)) ) ]
+                    for tag in t:
+                        t_combined.append(getattr(Task, "tags").like("%%%s%%" % (tag+',') ))
+                    tags.append( and_(*t_combined) )
 
-        # Filter by available tags
-        q = q.filter(or_(*tags))
+            # Filter by available tags
+            q = q.filter(or_(*tags))
 
         # Submit appropriate tasks to node
         if pend_tasks_num > 0:
@@ -842,9 +861,7 @@ class StatusThread(threading.Thread):
                         self.submit_tasks(node, MINIMUMQUEUE[node.name] - status["pending"])
                     elif statuses.get("master", {}).get("pending", 0) > MINIMUMQUEUE.get("master", 0) and \
                          status["pending"] < MINIMUMQUEUE[node.name]:
-
-                        print "submit time", node.name, statuses.get("master", {}).get("pending", 0), MINIMUMQUEUE[node.name], MINIMUMQUEUE.get("master", 0), MINIMUMQUEUE[node.name] - status["pending"]
-                        self.submit_tasks(node, MINIMUMQUEUE[node.name] - status["pending"])
+                       self.submit_tasks(node, MINIMUMQUEUE[node.name] - status["pending"])
 
                     if node.last_check:
                         last_check = int(node.last_check.strftime("%s"))
@@ -1127,6 +1144,7 @@ def create_app(database_connection):
     app = Flask("Distributed Cuckoo")
     app.config["SQLALCHEMY_DATABASE_URI"] = database_connection
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
+    app.config['SQLALCHEMY_POOL_SIZE'] = 20
     app.config["SECRET_KEY"] = os.urandom(32)
 
     restapi = DistRestApi(app)
