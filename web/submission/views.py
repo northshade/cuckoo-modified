@@ -94,7 +94,12 @@ def index(request):
         if request.POST.get("tor"):
             if options:
                 options += ","
-            options += "tor=yes"
+            options += "route=tor"
+
+        if request.POST.get("route", None):
+            if options:
+                options += ","
+            options += "route={0}".format(request.POST.get("route", None))
 
         if request.POST.get("process_memory"):
             if options:
@@ -334,6 +339,7 @@ def index(request):
             return render(request, "error.html",
                                       {"error": "Error adding task to Cuckoo's database."})
     else:
+        cfg = Config("cuckoo")
         enabledconf = dict()
         enabledconf["vt"] = settings.VTDL_ENABLED
         enabledconf["kernel"] = settings.OPT_ZER0M0N
@@ -386,6 +392,11 @@ def index(request):
                                   {"packages": sorted(packages),
                                    "machines": machines,
                                    "gateways": settings.GATEWAYS,
+                                   "vpns": vpns.values(), 
+                                   "route": cfg.routing.route,
+                                   "internet": cfg.routing.internet,
+                                   "inetsim": cfg.routing.inetsim,
+                                   "tor": cfg.routing.tor,
                                    "config": enabledconf})
 
 @conditional_login_required(login_required, settings.WEB_AUTHENTICATION)

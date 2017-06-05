@@ -14,6 +14,11 @@ except ImportError:
 CUCKOO_PATH = os.path.join(os.getcwd(), "..")
 sys.path.append(CUCKOO_PATH)
 from lib.cuckoo.common.config import Config
+# In case we have VPNs enabled we need to initialize through the following
+# two methods as they verify the interaction with VPNs as well as gather
+# which VPNs are available (for representation upon File/URL submission).
+from lib.cuckoo.core.startup import init_rooter, init_routing
+
 
 cfg = Config("reporting")
 
@@ -28,6 +33,9 @@ if cfg.mongodb.get("enabled") and cfg.elasticsearchdb.get("enabled") and \
 aux_cfg =  Config("auxiliary")
 vtdl_cfg = aux_cfg.virustotaldl
 tor_cfg = aux_cfg.tor
+
+init_rooter()
+init_routing()
 
 # Enable Django authentication for website
 WEB_AUTHENTICATION = False
