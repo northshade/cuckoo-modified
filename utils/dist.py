@@ -126,7 +126,6 @@ class Retriever(object):
     def cleaner(self):
         """ Method that runs forever """
         with app.app_context():
-            threads_fetcher = []
             while True:
                 if not self.cleaner_queue.empty():
                     node, task_id = self.cleaner_queue.get()
@@ -169,12 +168,12 @@ class Retriever(object):
     def starter(self):
         """ Method that runs forever """
         with app.app_context():
-            tasks = Task.query.filter_by(retrieved=False, finished=True).order_by(Task.id.asc()).all()
-            for task in tasks:
-                self.queue.put((task.id, task.task_id, task.node_id, task.main_task_id))
-
             threads = []
             while True:
+                tasks = Task.query.filter_by(retrieved=False, finished=True).order_by(Task.id.asc()).all()
+                for task in tasks:
+                    if (task.id, task.task_id, task.node_id, task.main_task_id) not in self.queue.queue:
+                        self.queue.put((task.id, task.task_id, task.node_id, task.main_task_id))
 
                 if not self.queue.empty() and len(threads) < self.threads_number:
                     dist_id, task_id, node_id, main_task_id = self.queue.get()
@@ -208,14 +207,11 @@ class Retriever(object):
                         if (tf.id, tf.task_id, tf.node_id, tf.main_task_id) not in self.queue.queue:
                             log.debug("adding to dist2 retriever: {}".format(task))
                             self.queue.put((tf.id, tf.task_id, tf.node_id, tf.main_task_id))
-                        #else:
-                             #if not (node.id, task.get("id")) in self.cleaner_queue.queue:
-                                #self.cleaner_queue.put((node.id, task.get("id")))
                     else:
                         # sometime it not deletes tasks in slaves of some fails or something
                         # this will do the trick
                         lock_retriever.acquire()
-                        if not (node.id, task.get("id")) in self.cleaner_queue.queue:
+                        if (node.id, task.get("id")) not in self.cleaner_queue.queue:
                             self.cleaner_queue.put((node.id, task.get("id")))
                         lock_retriever.release()
                     return
@@ -230,10 +226,10 @@ class Retriever(object):
                     db.session.commit()
                     db.session.refresh(t)
                     lock_retriever.acquire()
-                    if not (t.node_id, t.task_id) in self.cleaner_queue.queue:
+                    if (t.node_id, t.task_id) not in self.cleaner_queue.queue:
                         self.cleaner_queue.put((t.node_id, t.task_id))
                     lock_retriever.release()
-                    main_db.set_status(t.main_task_id, TASK_FAILED_REPORTING)
+                    #main_db.set_status(t.main_task_id, TASK_FAILED_REPORTING)
 
                     return
                 temp_f = ''
@@ -272,7 +268,7 @@ class Retriever(object):
                                         log.error(e)
                                         report = {}
 
-                                    if report_mongo:# and report:
+                                    if report_mongo:
                                         # move file here from slaves
                                         retrieve.queue.put((t.id, t.task_id, t.node_id, t.main_task_id))
 
@@ -298,24 +294,30 @@ class Retriever(object):
 
                                     # closing StringIO objects
                                     fileobj.close()
+                                else:
+                                    log.debug("Mongo reporting is not enabled. t.task_id: {}".format(t.task_id))
                         except Exception as e:
                             log.info("Exception: %s" % e)
                             if os.path.exists(os.path.join(report_path, "reports", "report.json")):
                                 os.remove(os.path.join(report_path, "reports", "report.json"))
                         del temp_f
-                    if finished:
-                        t.finished = True
-                        db.session.commit()
-                        db.session.refresh(t)
+                    else:
+                        log.debug("NOT HAVE_MONGO. task_id: {}".format(t.task_id))
+                    log.debug("Mark as finished t.task_id: {}".format(t.task_id))
+                    t.finished = True
+                    db.session.commit()
+                    db.session.refresh(t)
                     if status_count.get(node.name, {}).get("reseted", False) is True:
                         status_count[node.name]["reseted"] = False
+                else:
+                    log.debug("temp_f is empty. t.task_id: {}".format(t.task_id))
             except Exception as e:
                 log.error(e)
 
     def downloader(self, dist_id, task_id, node_id, main_task_id):
         with app.app_context():
             try:
-                log.debug("Trying to retrieve task_id: {}, from task_id: {}, dist_id: {}, main_task_id: {}".format(dist_id, task_id, node_id, main_task_id))
+                log.debug("Trying to retrieve dist2 for task_id: {}, from task_id: {}, dist_id: {}, main_task_id: {}".format(dist_id, task_id, node_id, main_task_id))
                 report = ReportApi().get(dist_id, "dist2", True, True)
 
                 if report and report.status_code == 200:
@@ -341,7 +343,7 @@ class Retriever(object):
                         db.session.commit()
                         db.session.refresh(t)
                         lock_retriever.acquire()
-                        if not (t.node_id, t.task_id) in self.cleaner_queue.queue:
+                        if (t.node_id, t.task_id) not in self.cleaner_queue.queue:
                             self.cleaner_queue.put((t.node_id, t.task_id))
                         lock_retriever.release()
                 else:
@@ -355,12 +357,12 @@ class Retriever(object):
                             db.session.commit()
                             db.session.refresh(t)
                             lock_retriever.acquire()
-                            if not (t.node_id, t.task_id) in self.cleaner_queue.queue:
+                            if (t.node_id, t.task_id) not in self.cleaner_queue.queue:
                                 self.cleaner_queue.put((t.node_id, t.task_id))
                             lock_retriever.release()
 
             except Exception as e:
-                log.info("Can not fetch dist2 report for Web Task: id:{}, task_id:{}, node_id:{}, main_task_id: {}. Error: {}".format(dist_id, task_id, node_id, main_task_id, e))
+                log.info("Can't fetch dist2 report for Web Task: id:{}, task_id:{}, node_id:{}, main_task_id: {}. Error: {}".format(dist_id, task_id, node_id, main_task_id, e))
                 with app.app_context():
                     t = Task.query.filter_by(node_id=node_id, task_id=task_id, finished=True).order_by(Task.id.desc()).first()
                     #t = q.order_by(Task.id.desc()).first()
@@ -370,10 +372,12 @@ class Retriever(object):
                         t.finished = True
                         db.session.commit()
                         db.session.refresh(t)
-                        lock_retriever.acquire()
-                        if not (t.node_id, t.task_id) in self.cleaner_queue.queue:
-                            self.cleaner_queue.put((t.node_id, t.task_id))
-                        lock_retriever.release()
+                        #main_db.set_status(t.main_task_id, TASK_FAILED_REPORTING)
+                        if "404: Not Found" not in str(e.message):
+                            lock_retriever.acquire()
+                            if (t.node_id, t.task_id) not in self.cleaner_queue.queue:
+                                self.cleaner_queue.put((t.node_id, t.task_id))
+                            lock_retriever.release()
 
         return
 
@@ -755,7 +759,6 @@ class StatusThread(threading.Thread):
         # Order by task priority and task id.
         q = q.order_by(-Task.priority, Task.main_task_id)
 
-        print reporting_conf.distributed.tags
         if reporting_conf.distributed.enable_tags:
             # Get available node tags
             machines = Machine.query.filter_by(node_id=node.id).all()
@@ -817,7 +820,7 @@ class StatusThread(threading.Thread):
                 #this will reduce number of requests to slaves if there no tasks
                 status_count[node.name].setdefault("retrieve", False)
 
-        threads_number = 5
+        threads_number = reporting_conf.distributed.dist_threads
         if reporting_conf.distributed.retriever_threads:
             threads_number = int(reporting_conf.distributed.retriever_threads)
 
