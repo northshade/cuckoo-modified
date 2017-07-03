@@ -3,6 +3,7 @@
 # See the file 'docs/LICENSE' for copying permission.
 
 import os
+import csv
 import requests
 import datetime
 import threading
@@ -13,7 +14,7 @@ try:
     import re2 as re
 except ImportError:
     import re
-    
+
 import xml.etree.ElementTree as ET
 
 from lib.cuckoo.common.config import Config
@@ -33,6 +34,12 @@ try:
     HAVE_LIBVIRT = True
 except ImportError:
     HAVE_LIBVIRT = False
+
+try:
+    import tldextract
+    HAVE_TLDEXTRACT = True
+except ImportError:
+    HAVE_TLDEXTRACT = False
 
 log = logging.getLogger(__name__)
 
@@ -693,6 +700,21 @@ class Signature(object):
         self._current_call_dict = None
         self._current_call_raw_cache = None
         self._current_call_raw_dict = None
+        self._alexadb = self._load_alexadb()
+
+    def _load_alexadb(self):
+        alexa = dict()
+        alexa_path = os.path.join(CUCKOO_ROOT, 'data', 'alexa.csv')
+        if os.path.exists(alexa_path):
+            with open(alexa_path, 'rb') as alexa_csv:
+                spamreader = csv.reader(alexa_csv, delimiter=',', quotechar='"')
+                for row in spamreader:
+                    alexa_tld = tldextract.extract(row[1])
+                    alexa.setdefault(alexa_tld.domain + "." + alexa_tld.suffix, list())
+                    if row[1] not in alexa[alexa_tld.domain + "." + alexa_tld.suffix]:
+                        alexa[alexa_tld.domain + "." + alexa_tld.suffix].append(row[1])
+
+        return alexa
 
     def add_statistic(self, name, field, value):
         if name not in self.results["statistics"]["signatures"]:
@@ -1236,7 +1258,7 @@ class Signature(object):
             return self._current_call_dict[name]
 
         return None
-        
+
     def get_name_from_pid(self, pid):
         """Retrieve a process name from a supplied pid
         @param pid: a Process PID observed in the analysis
@@ -1285,6 +1307,29 @@ class Signature(object):
                     res = True
                     break
         return res
+
+    def check_alexa(self, pattern):
+        """
+        @param pattern: domain/url to check in alexa db
+        @return: True/False
+        """
+        # pre check for correct parsing
+        if "://" not in pattern:
+            pattern = "http://"+pattern
+
+        if HAVE_TLDEXTRACT:
+            tld_res = tldextract.extract(pattern)
+            if tld_res.domain + "." + tld_res.suffix in self._alexadb:
+                # no subdomain, mean alexa match
+                if tld_res.subdomain == "":
+                    return True
+                #subdomain and alexa match
+                elif tld_res.subdomain + "." +tld_res.domain + "." + tld.suffix in alexa[tld_res.domain + "." + tld_res.suffix]:
+                    return True
+        else:
+            log.warn("Missed tldextract dependencie")
+
+        return False
 
     def add_match(self, process, type, match):
         """Adds a match to the signature data.
