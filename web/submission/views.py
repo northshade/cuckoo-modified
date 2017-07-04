@@ -72,7 +72,10 @@ def index(request):
         enforce_timeout = bool(request.POST.get("enforce_timeout", False))
         referrer = validate_referrer(request.POST.get("referrer", None))
         tags = request.POST.get("tags", None)
-
+        for option in options.split(","):
+            if option.startswith("filename="):
+                opt_filename = option.split("filename=")[1]
+                break
         task_gateways = []
         ipaddy_re = re.compile(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
 
@@ -288,7 +291,10 @@ def index(request):
                 onesuccess = False
 
                 for h in hashlist:
-                    filename = base_dir + "/" + h
+                    if opt_filename:
+                        filename = base_dir + "/" + opt_filename
+                    else:
+                        filename = base_dir + "/" + h
                     if settings.VTDL_PRIV_KEY:
                         url = 'https://www.virustotal.com/vtapi/v2/file/download'
                         params = {'apikey': settings.VTDL_PRIV_KEY, 'hash': h}
