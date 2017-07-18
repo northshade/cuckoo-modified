@@ -112,7 +112,7 @@ def index(request):
         if request.POST.get("kernel_analysis"):
             if options:
                 options += ","
-            options += "kernel_analysis=yes"   
+            options += "kernel_analysis=yes"
 
         if request.POST.get("norefer"):
             if options:
@@ -130,7 +130,7 @@ def index(request):
                 if request.POST.get("all_gw_in_group"):
                     tgateway = settings.GATEWAYS[gateway].split(",")
                     for e in tgateway:
-                        task_gateways.append(settings.GATEWAYS[e]) 
+                        task_gateways.append(settings.GATEWAYS[e])
                 else:
                     tgateway = random.choice(settings.GATEWAYS[gateway].split(","))
                     task_gateways.append(settings.GATEWAYS[tgateway])
@@ -165,12 +165,12 @@ def index(request):
                 elif sample.size > settings.MAX_UPLOAD_SIZE:
                     return render(request, "error.html",
                                               {"error": "You uploaded a file that exceeds the maximum allowed upload size specified in web/web/local_settings.py."})
-    
+
                 # Moving sample from django temporary file to Cuckoo temporary storage to
                 # let it persist between reboot (if user like to configure it in that way).
                 path = store_temp_file(sample.read(),
                                        sample.name)
-    
+
                 for gw in task_gateways:
                     options = update_options(gw, orig_options)
 
@@ -196,7 +196,7 @@ def index(request):
                 elif sample.size > settings.MAX_UPLOAD_SIZE:
                     return render(request, "error.html",
                                               {"error": "You uploaded a quarantine file that exceeds the maximum allowed upload size specified in web/web/local_settings.py."})
-    
+
                 # Moving sample from django temporary file to Cuckoo temporary storage to
                 # let it persist between reboot (if user like to configure it in that way).
                 tmp_path = store_temp_file(sample.read(),
@@ -225,7 +225,7 @@ def index(request):
                 if not sample.size:
                     if len(samples) != 1:
                         continue
-                    
+
                     return render(request, "error.html",
                                               {"error": "You uploaded an empty PCAP file."})
                 elif sample.size > settings.MAX_UPLOAD_SIZE:
@@ -248,7 +248,7 @@ def index(request):
                     else:
                         return render(request, "error.html",
                                                   {"error": "Conversion from SAZ to PCAP failed."})
-       
+
                 task_id = db.add_pcap(file_path=path, priority=priority)
                 task_ids.append(task_id)
 
@@ -398,7 +398,7 @@ def index(request):
                                   {"packages": sorted(packages),
                                    "machines": machines,
                                    "gateways": settings.GATEWAYS,
-                                   "vpns": vpns.values(), 
+                                   "vpns": vpns.values(),
                                    "route": cfg.routing.route,
                                    "internet": cfg.routing.internet,
                                    "inetsim": cfg.routing.inetsim,
