@@ -123,6 +123,31 @@ class Retriever(object):
         thread.daemon = True
         thread.start()
 
+        thread = threading.Thread(target=self.failed_cleaner, args=())
+        thread.daemon = True
+        thread.start()
+
+    def failed_cleaner(self):
+        with app.app_context():
+            while True:
+                for node in Node.query.filter_by(enabled=True).all():
+                    # Fetch the latest reports.
+                    if node.name == "master":
+                        continue
+
+                    for task in node.fetch_tasks("failed_analysis"):
+                        t = Task.query.filter_by(task_id=task["id"], node_id=node.id).order_by(Task.id.asc()).first()
+                        log.info("Cleaning failed_analysis for id:{}, node:{}".format(t.id, t.node_id))
+                        main_db.set_status(t.main_task_id, TASK_FAILED_REPORTING)
+                        t.finished = True
+                        t.retrieved = True
+                        db.session.commit()
+                        db.session.refresh(t)
+                        if (t.node_id, t.task_id) not in self.cleaner_queue.queue:
+                            self.cleaner_queue.put((t.node_id, t.task_id))
+
+                time.sleep(60)
+
     def cleaner(self):
         """ Method that runs forever """
         with app.app_context():
