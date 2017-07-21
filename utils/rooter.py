@@ -131,7 +131,7 @@ def inetsim_enable(ipaddr, inetsim_ip, resultserver_port, interface):
    run(settings.iptables, "-t", "nat", "-A", "PREROUTING", "-p",
        "tcp", "--dport", "53", "--source", ipaddr, "-j", "DNAT",
        "--to-destination", "{}:53".format(inetsim_ip))
-  3 run(settings.iptables, "-t", "nat", "-A", "PREROUTING", "-p",
+   run(settings.iptables, "-t", "nat", "-A", "PREROUTING", "-p",
        "udp", "--dport", "53", "--source", ipaddr, "-j", "DNAT",
        "--to-destination", "{}:53".format(inetsim_ip))
    run(settings.iptables, "-A", "OUTPUT", "-s", ipaddr, "-j", "DROP")
