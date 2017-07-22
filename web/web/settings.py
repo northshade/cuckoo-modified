@@ -32,7 +32,6 @@ if cfg.mongodb.get("enabled") and cfg.elasticsearchdb.get("enabled") and \
 
 aux_cfg =  Config("auxiliary")
 vtdl_cfg = aux_cfg.virustotaldl
-tor_cfg = aux_cfg.tor
 
 init_rooter()
 init_routing()
@@ -73,8 +72,8 @@ if GATEWAYS:
         if "," in e:
             continue
         elif ipaddy_re.match(GATEWAYS[e]):
-            GATEWAYS_IP_MAP[GATEWAYS[e]]=e  
- 
+            GATEWAYS_IP_MAP[GATEWAYS[e]]=e
+
 
 # Enabled/Disable Zer0m0n tickbox on the submission page
 OPT_ZER0M0N = False
