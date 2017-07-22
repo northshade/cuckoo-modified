@@ -26,6 +26,7 @@ from lib.cuckoo.common.quarantine import unquarantine
 from lib.cuckoo.common.saztopcap import saz_to_pcap
 from lib.cuckoo.common.exceptions import CuckooDemuxError
 from lib.cuckoo.core.database import Database
+from lib.cuckoo.core.rooter import vpns
 
 # Conditional decorator for web authentication
 class conditional_login_required(object):
