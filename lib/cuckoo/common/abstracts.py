@@ -691,7 +691,6 @@ class Signature(object):
     filter_apinames = set()
     filter_categories = set()
     filter_analysistypes = set()
-    _alexadb = self._load_alexadb()
     
     def __init__(self, results=None):
         self.data = []
@@ -702,6 +701,10 @@ class Signature(object):
         self._current_call_raw_cache = None
         self._current_call_raw_dict = None
         
+        if not hasattr(Signature, "_alexadb"):
+            # initialize only once
+            Signature._alexadb = self._load_alexadb()
+            
     def _load_alexadb(self):
         alexa = dict()
         alexa_path = os.path.join(CUCKOO_ROOT, 'data', 'alexa.csv')
