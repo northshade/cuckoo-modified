@@ -121,7 +121,7 @@ class Retention(Report):
 
     def run(self, options):
         # Curtask used for logging when deleting files
-        curtask = 563340#results["info"]["id"]
+        curtask = results["info"]["id"]
 
         # Since we should be the last run reporting module, make sure we don't delay
         # an analyst from being able to see results for their analysis on account
