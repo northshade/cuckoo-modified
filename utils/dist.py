@@ -614,8 +614,11 @@ class Node(db.Model):
             if not os.path.isfile(task.path):
                 task.finished = True
                 task.retrieved = True
-                db.session.commit()
-                db.session.refresh(task)
+                try:
+                    db.session.commit()
+                    db.session.refresh(task)
+                except:
+                    db.session.rollback()
                 return
 
             if self.name != "master":
@@ -775,8 +778,11 @@ class StatusThread(threading.Thread):
                                 enforce_timeout=t.enforce_timeout, main_task_id=t.id)
                     task = Task(path=t.target, **args)
                     db.session.add(task)
-
-            db.session.commit()
+                try:
+                    db.session.commit()
+                except Exception as e:
+                    main_db.set_status(t.id, TASK_FAILED_REPORTING)
+                    db.session.rollback()
 
         # Only get tasks that have not been pushed yet.
         q = Task.query.filter(or_(Task.node_id==None, Task.task_id==None), Task.finished==False)
@@ -856,7 +862,7 @@ class StatusThread(threading.Thread):
         retrieve = Retriever(threads_number, app)
         retrieve.background()
         statuses = {}
-        while RUNNING:
+        while True:
             with app.app_context():
                 start = datetime.now()
 
@@ -1194,7 +1200,7 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 app = create_app(database_connection=reporting_conf.distributed.db)
 
-RUNNING, STATUSES = True, {}
+STATUSES = {}
 main_db = Database()
 
 if __name__ == "__main__":
