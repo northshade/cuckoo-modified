@@ -9,8 +9,8 @@ import os.path
 import re
 import subprocess
 
-from cuckoo.common.abstracts import Processing
-from cuckoo.common.exceptions import CuckooProcessingError
+from lib.cuckoo.common.abstracts import Processing
+from lib.cuckoo.common.exceptions import CuckooProcessingError
 
 log = logging.getLogger(__name__)
 
