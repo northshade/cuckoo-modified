@@ -71,7 +71,6 @@ class AnalysisManager(threading.Thread):
         self.task = task
         self.errors = error_queue
         self.cfg = Config()
-        self.vpn_cfg = Config("vpn")
         self.storage = ""
         self.binary = ""
         self.machine = None
@@ -597,6 +596,7 @@ class Scheduler:
         self.db = Database()
         self.maxcount = maxcount
         self.total_analysis_count = 0
+        self.vpn_cfg = Config("vpn")
 
     def initialize(self):
         """Initialize the machine manager."""
