@@ -71,6 +71,7 @@ class AnalysisManager(threading.Thread):
         self.task = task
         self.errors = error_queue
         self.cfg = Config()
+        self.vpn_cfg = Config("vpn")
         self.storage = ""
         self.binary = ""
         self.machine = None
@@ -506,7 +507,7 @@ class AnalysisManager(threading.Thread):
                 if key == "route":
                     self.route = value
                     break
-                    
+
         if self.route == "none":
             self.interface = None
             self.rt_table = None
@@ -659,13 +660,27 @@ class Scheduler:
                         "increase throughput and stability. Please read the "
                         "documentation about the `Processing Utility`.")
 
-        # Drop forwarding rule to each VPN.
-        for vpn in vpns.values():
-            rooter("forward_disable", machine.interface,vpn.interface, machine.ip)
+        # Drop all existing packet forwarding rules for each VM. Just in case
+        # Cuckoo was terminated for some reason and various forwarding rules
+        # have thus not been dropped yet.
+        for machine in machinery.machines():
+            if not machine.interface:
+                log.info("Unable to determine the network interface for VM "
+                         "with name %s, Cuckoo will not be able to give it "
+                         "full internet access or route it through a VPN! "
+                         "Please define a default network interface for the "
+                         "machinery or define a network interface for each "
+                         "VM.", machine.name)
+                continue
 
-        # Drop forwarding rule to the internet / dirty line.
-        if self.cfg.routing.internet != "none":
-            rooter("forward_disable", machine.interface,self.cfg.routing.internet, machine.ip)
+            # Drop forwarding rule to each VPN.
+            if self.vpn_cfg.vpn.enabled:
+                for vpn in vpns.values():
+                    rooter("forward_disable", machine.interface, vpn.interface, machine.ip)
+
+            # Drop forwarding rule to the internet / dirty line.
+            if self.cfg.routing.internet != "none":
+                rooter("forward_disable", machine.interface,self.cfg.routing.internet, machine.ip)
 
     def stop(self):
         """Stop scheduler."""
