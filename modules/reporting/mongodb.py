@@ -102,7 +102,7 @@ class MongoDB(Report):
                                          shot_file)
                 screenshot = File(shot_path)
                 if screenshot.valid():
-                    # Strip the extension as it's added later 
+                    # Strip the extension as it's added later
                     # in the Django view
                     report["shots"].append(shot_file.replace(".jpg", ""))
 
@@ -170,11 +170,15 @@ class MongoDB(Report):
                 report["suri_ssh_cnt"] = len(results["suricata"]["ssh"])
             if results["suricata"].has_key("dns") and len(results["suricata"]["dns"]) > 0:
                 report["suri_dns_cnt"] = len(results["suricata"]["dns"])
-        
+
         # Create an index based on the info.id dict key. Increases overall scalability
         # with large amounts of data.
         # Note: Silently ignores the creation if the index already exists.
         self.db.analysis.create_index("info.id", background=True)
+
+        #trick for distributed api
+        if results.get("info", {}).get("options", {}).get("main_task_id", ""):
+            report["info"]["id"] = int(results.get("info", {}).get("options", {}).get("main_task_id", ""))
 
         # Store the report and retrieve its object id.
         try:

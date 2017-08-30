@@ -28,7 +28,7 @@ from lib.cuckoo.common.objects import Dictionary
 from lib.cuckoo.common.utils import create_folder
 from lib.cuckoo.core.database import Database
 from lib.cuckoo.core.resultserver import ResultServer
-
+from django.core.validators import URLValidator
 try:
     import libvirt
     HAVE_LIBVIRT = True
@@ -691,7 +691,7 @@ class Signature(object):
     filter_apinames = set()
     filter_categories = set()
     filter_analysistypes = set()
-    
+
     def __init__(self, results=None):
         self.data = []
         self.new_data = []
@@ -700,11 +700,11 @@ class Signature(object):
         self._current_call_dict = None
         self._current_call_raw_cache = None
         self._current_call_raw_dict = None
-        
+
         if not hasattr(Signature, "_alexadb"):
             # initialize only once
             Signature._alexadb = self._load_alexadb()
-            
+
     def _load_alexadb(self):
         alexa = dict()
         alexa_path = os.path.join(CUCKOO_ROOT, 'data', 'alexa.csv')
@@ -724,6 +724,31 @@ class Signature(object):
             self.results["statistics"]["signatures"][name] = { }
 
         self.results["statistics"]["signatures"][name][field] = value
+
+    def _check_valid_url(self, url, all_checks=False):
+        """ Checks if url is correct and can be parsed by tldextract/urlparse
+        @param url: string
+        @return: url or None
+        """
+
+        val = URLValidator(schemes=["http", "https"])
+
+        try:
+            val(url)
+            return url
+        except:
+            pass
+
+        if all_checks:
+            last = url.rfind("://")
+            if url[:last] in ("http", "https"):
+                url = url[last+3:]
+
+        try:
+            val("http://%s" % url)
+            return "http://%s" % url
+        except:
+            pass
 
     def _check_value(self, pattern, subject, regex=False, all=False, ignorecase=True):
         """Checks a pattern against a given subject.
@@ -1327,7 +1352,7 @@ class Signature(object):
                 if tld_res.subdomain == "":
                     return True
                 #subdomain and alexa match
-                elif tld_res.subdomain + "." +tld_res.domain + "." + tld.suffix in alexa[tld_res.domain + "." + tld_res.suffix]:
+                elif tld_res.subdomain + "." +tld_res.domain + "." + tld_res.suffix in self._alexa[tld_res.domain + "." + tld_res.suffix]:
                     return True
         else:
             log.warn("Missed tldextract dependencie")

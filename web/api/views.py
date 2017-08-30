@@ -270,7 +270,7 @@ def tasks_create_file(request):
                     return jsonize(resp, response=True)
 
 
-                tmp_path = store_temp_file(sample.read(), sample.name)
+                tmp_path = store_temp_file(sample.read(), sample.name.decode('utf-8', errors="ignore"))
                 if pcap:
                     if sample.name.lower().endswith(".saz"):
                         saz = saz_to_pcap(tmp_path)
@@ -340,7 +340,7 @@ def tasks_create_file(request):
             if len(request.FILES.getlist("file")) > 1:
                 resp["warning"] = ("Multi-file API submissions disabled - "
                                    "Accepting first file")
-            tmp_path = store_temp_file(sample.read(), sample.name)
+            tmp_path = store_temp_file(sample.read(), sample.name.decode('utf-8', errors="ignore"))
             if pcap:
                 if sample.name.lower().endswith(".saz"):
                     saz = saz_to_pcap(tmp_path)
