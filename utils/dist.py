@@ -24,20 +24,19 @@ from itertools import combinations
 
 import zipfile
 import StringIO
-from bson.json_util import loads
 
 CUCKOO_ROOT = os.path.join(os.path.abspath(os.path.dirname(__file__)), "..")
 sys.path.append(CUCKOO_ROOT)
 
 from lib.cuckoo.common.config import Config
 from lib.cuckoo.common.utils import store_temp_file
-from lib.cuckoo.common.exceptions import CuckooReportError
 from lib.cuckoo.core.database import Database, TASK_COMPLETED, TASK_REPORTED, TASK_RUNNING, TASK_PENDING, TASK_FAILED_REPORTING
 
 # we need original db to reserve ID in db,
 # to store later report, from master or slave
 reporting_conf = Config("reporting")
 
+dead_count = 5
 if reporting_conf.distributed.dead_count:
     dead_count = reporting_conf.distributed.dead_count
 
@@ -51,7 +50,6 @@ status_count = dict()
 
 lock_retriever = threading.Lock()
 dist_lock = threading.BoundedSemaphore(int(reporting_conf.distributed.dist_threads))
-dist2_lock = threading.BoundedSemaphore(int(reporting_conf.distributed.dist2_threads))
 remove_lock = threading.BoundedSemaphore(20)
 notification_lock = threading.BoundedSemaphore(20)
 
@@ -96,10 +94,8 @@ except ImportError:
 
 class Retriever(object):
 
-    def __init__(self, threads_number, app):
-        self.queue = Queue.Queue()
+    def __init__(self, app):
         self.cleaner_queue = Queue.Queue()
-        self.threads_number = threads_number
         self.fetcher_queue = Queue.Queue()
         self.notification_queue = Queue.Queue()
         self.t_is_none = dict()
@@ -118,15 +114,6 @@ class Retriever(object):
         thread = threading.Thread(target=self.fetcher, args=())
         thread.daemon = True
         thread.start()
-
-        #thread = threading.Thread(target=self.starter, args=())
-        #thread.daemon = True
-        #thread.start()
-
-        for x in xrange(self.threads_number):
-             if dist2_lock.acquire(blocking=False):
-                thread = threading.Thread(target=self.downloader, args=())
-                thread.start()
 
         for x in xrange(20):
             if remove_lock.acquire(blocking=False):
@@ -168,7 +155,6 @@ class Retriever(object):
                             t.finished = True
                             t.retrieved = True
                             db.session.commit()
-                            #db.session.refresh(t)
                             lock_retriever.acquire()
                             if (t.node_id, t.task_id) not in self.cleaner_queue.queue:
                                 self.cleaner_queue.put((t.node_id, t.task_id))
@@ -195,20 +181,14 @@ class Retriever(object):
                 for node in Node.query.filter_by(enabled=True).all():
                     self.status_count.setdefault(node.name, 0)
 
-                    # Fetch X tasks per node
-                    cnt = 0
                     for task in node.fetch_tasks("reported", since=0):
                         try:
                             if (task["id"] not in self.t_is_none.get(node.id, list()) and \
                                 (task, node.id) not in self.fetcher_queue.queue and \
                                 task["id"] not in self.current_queue.get(node.id, []) and \
-                                (node.id, task["id"]) not in self.cleaner_queue.queue):# and \
-                                #cnt <= 50:
+                                (node.id, task["id"]) not in self.cleaner_queue.queue):
 
                                 self.fetcher_queue.put((task, node.id))
-                                #cnt += 1
-                                #if cnt == 50:
-                                #    break
 
                         except Exception as e:
                             self.status_count[node.name] += 1
@@ -220,20 +200,6 @@ class Retriever(object):
                                 node_data.enabled = False
                                 db.session.commit()
 
-    '''
-    def starter(self):
-        """ Method that runs forever """
-        with app.app_context():
-            while True:
-
-                tasks = Task.query.filter_by(retrieved=False, finished=True).order_by(Task.id.desc()).all()
-                for task in tasks:
-                    if (task.id, task.task_id, task.node_id, task.main_task_id) not in self.queue.queue and task.id not in self.current_two_queue.get(task.node_id, []):
-                        self.queue.put((task.id, task.task_id, task.node_id, task.main_task_id))
-
-                time.sleep(300)
-
-    '''
 
     # This should be executed as external thread as it generates bottle neck
     def fetch_latest_reports(self):
@@ -253,11 +219,6 @@ class Retriever(object):
                         t = q.order_by(Task.id.desc()).first()
                         if t is None:
                             self.t_is_none.setdefault(node_id, list()).append(task["id"])
-                            tf = Task.query.filter_by(finished=True, retrieved=False, task_id=task["id"], node_id=node_id).order_by().first()
-                            if tf is not None:
-                                if (tf.id, tf.task_id, tf.node_id, tf.main_task_id) not in self.queue.queue:
-                                    log.debug("adding to dist2 retriever: {}".format(task["id"]))
-                                    self.queue.put((tf.id, tf.task_id, tf.node_id, tf.main_task_id))
                             """
                             else:
                                 # sometime it not deletes tasks in slaves of some fails or something
@@ -283,15 +244,8 @@ class Retriever(object):
                             fileobj = StringIO.StringIO(report.content)
                             if fileobj.len:
                                 file = tarfile.open(fileobj=fileobj, mode="r:bz2") # errorlevel=0
-                                """
-                                to_extract = file.getmembers()
-                                to_extract = [to_extract.remove(file_inside)
-                                                if file_inside.name == 'mongo.json' or file_inside.name == "reports/report.json" else file_inside
-                                                for file_inside in to_extract]
-                                to_extract = filter(None, to_extract)
-                                """
                                 try:
-                                    file.extractall(report_path)#, members=to_extract)
+                                    file.extractall(report_path)
                                 except OSError:
                                     log.error("Permission denied: {}".format(report_path))
                                 # set complated_on time
@@ -299,10 +253,11 @@ class Retriever(object):
                                 # set reported time
                                 main_db.set_status(t.main_task_id, TASK_REPORTED)
                                 t.finished = True
+                                t.retrieved = True
                                 db.session.commit()
+                                if (t.node_id, t.task_id) not in self.cleaner_queue.queue:
+                                    self.cleaner_queue.put((t.node_id, t.task_id))
 
-                                # move file here from slaves
-                                retrieve.queue.put((t.id, t.task_id, t.node_id, t.main_task_id))
                                 self.notification_queue.put(t.main_task_id)
 
                                 if os.path.exists(t.path):
@@ -310,7 +265,7 @@ class Retriever(object):
                                     sample_sha256 = hashlib.sha256(sample).hexdigest()
                                     destination = os.path.join(CUCKOO_ROOT, "storage", "binaries")
                                     if not os.path.exists(destination):
-                                        os.mkdir(destination,  mode=0755)
+                                        os.mkdir(destination, mode=0755)
                                     destination = os.path.join(destination, sample_sha256)
                                     if not os.path.exists(destination):
                                         shutil.move(t.path, destination)
@@ -318,7 +273,7 @@ class Retriever(object):
                                     try:
                                         os.symlink(destination, os.path.join(report_path, "binary"))
                                     except Exception as e:
-                                        logging.error("os.symlink fails, file exists")
+                                        pass
                             else:
                                 log.error("Tar file is empty")
                                 # closing StringIO objects
@@ -329,60 +284,9 @@ class Retriever(object):
                             logging.exception("Exception: %s" % e)
                             if os.path.exists(os.path.join(report_path, "reports", "report.json")):
                                 os.remove(os.path.join(report_path, "reports", "report.json"))
-                        except Exception as e:
-                            logging.exception(e)
                     except Exception as e:
                         logging.exception(e)
                     self.current_queue[node_id].remove(task["id"])
-
-    def downloader(self):
-        with app.app_context():
-            while True:
-                    try:
-                        dist_id, task_id, node_id, main_task_id = self.queue.get()
-                    except Exception as e:
-                        print e
-                        continue
-                    self.current_two_queue.setdefault(node_id, list()).append(dist_id)
-                    retrieved = False
-                    try:
-                        log.debug("Trying to retrieve dist2 for task_id: {}, from task_id: {}, dist_id: {}, main_task_id: {}".format(dist_id, task_id, node_id, main_task_id))
-                        node = Node.query.filter_by(id = node_id).first()
-                        report = node.get_report(task_id, "dist2", stream=True)
-                        if report and report.status_code == 200:
-
-                            report_path = os.path.join(CUCKOO_ROOT, "storage", "analyses", "{}".format(main_task_id))
-                            all_files_tar = StringIO.StringIO(report.content)
-                            with tarfile.open(fileobj=all_files_tar, mode="r:bz2") as all_files:
-                                all_files.extractall(report_path)
-                            all_files_tar.close()
-
-                            # set retrieved to True
-                            retrieved = True
-
-                        elif report.status_code == 404:
-                            # set retrieved to True
-                            retrieved = True
-                        else:
-                            log.error(report.url)
-                            log.error("dist2 report is false, task_id: {}, node_id: {}, status_code: {}".format(task_id, node_id, report.status_code))
-                    except Exception as e:
-                        log.info("Can't fetch dist2 report for Web Task: id:{}, task_id:{}, node_id:{}, main_task_id: {}. Error: {}".format(dist_id, task_id, node_id, main_task_id, e))
-                        # set retrieved to True
-                        retrieved = True
-
-                    if retrieved:
-                        t = Task.query.filter_by(id=dist_id, node_id=node_id).order_by(Task.id.desc()).first()
-                        if t is not None:
-                            t.retrieved = True
-                            db.session.commit()
-                            if (t.node_id, t.task_id) not in self.cleaner_queue.queue:
-                                self.cleaner_queue.put((t.node_id, t.task_id))
-                        else:
-                            log.error("last dist2 error t is none {}".format(main_task_id))
-
-                    self.current_two_queue[node_id].remove(dist_id)
-
 
     def remove_from_slave(self, node_id, task_id):
         # Delete the task and all its associated files.
@@ -495,7 +399,6 @@ class Node(db.Model):
                 task.retrieved = True
                 try:
                     db.session.commit()
-                    #db.session.refresh(task)
                 except:
                     db.session.rollback()
                 return
@@ -511,11 +414,6 @@ class Node(db.Model):
                     task.task_id = r.json()["task_ids"][0]
                     log.info("Submitted task to slave: {}".format(task.task_id))
                 elif r.status_code == 500:
-                    #log.info("Failed submission to node: {} of {}, status code: {}".format(node.name, task.path, r.status_code))
-                    task.finished = True
-                    task.retrieved = True
-                    db.session.commit()
-                    #db.session.refresh(task)
                     return
                 else:
                     log.info("Node: {} - Task submit to slave failed: {} - {}".format(self.id, r.status_code, r.content))
@@ -760,19 +658,7 @@ class StatusThread(threading.Thread):
                          status["pending"] < MINIMUMQUEUE[node.name]:
                        self.submit_tasks(node, MINIMUMQUEUE[node.name] - status["pending"])
 
-
-                    # The last_check field of each node object has been
-                    # updated as well as the finished field for each task that
-                    # has been completed.
-                    db.session.commit()
-                    #db.session.refresh(node)
-
-                # Dump the uptime.
-                if app.config["UPTIME_LOGFILE"] is not None:
-                    with open(app.config["UPTIME_LOGFILE"], "ab") as f:
-                        t = int(start.strftime("%s"))
-                        c = json.dumps(dict(timestamp=t, status=statuses))
-                        print>>f, c
+                    #db.session.commit()
 
                 STATUSES = statuses
 
@@ -949,8 +835,7 @@ def create_app(database_connection):
     app = Flask("Distributed Cuckoo")
     app.config["SQLALCHEMY_DATABASE_URI"] = database_connection
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
-    app.config['SQLALCHEMY_POOL_SIZE'] = int(reporting_conf.distributed.dist_threads) + \
-                                         int(reporting_conf.distributed.dist2_threads) + 5
+    app.config['SQLALCHEMY_POOL_SIZE'] = int(reporting_conf.distributed.dist_threads) + 5
     app.config["SECRET_KEY"] = os.urandom(32)
     app.config["SQLALCHEMY_MAX_OVERFLOW"] = 100
     app.config["SQLALCHEMY_POOL_TIMEOUT"] = 200
@@ -974,10 +859,6 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 STATUSES = {}
 main_db = Database()
-
-threads_number = reporting_conf.distributed.dist_threads
-if reporting_conf.distributed.dist_threads:
-    threads_number = int(reporting_conf.distributed.dist_threads)
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
@@ -1020,7 +901,7 @@ if __name__ == "__main__":
             app.config["UPTIME_LOGFILE"] = reporting_conf.distributed.uptime_logfile
 
 
-        retrieve = Retriever(threads_number, app)
+        retrieve = Retriever(app)
         retrieve.background()
 
         t = StatusThread()
@@ -1041,10 +922,8 @@ else:
 
     if reporting_conf.distributed.samples_directory:
         app.config["SAMPLES_DIRECTORY"] = reporting_conf.distributed.samples_directory
-        app.config["UPTIME_LOGFILE"] = reporting_conf.distributed.uptime_logfile
 
-
-    retrieve = Retriever(threads_number, app)
+    retrieve = Retriever(app)
     retrieve.background()
 
     t = StatusThread()

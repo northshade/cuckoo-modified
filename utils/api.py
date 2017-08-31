@@ -280,8 +280,7 @@ def tasks_report(task_id, report_format="json"):
     bz_formats = {
         "all": {"type": "-", "files": ["memory.dmp"]},
         "dropped": {"type": "+", "files": ["files"]},
-        "dist" : {"type": "+", "files": ["shots", "reports"]},
-        "dist2": {"type": "-", "files": ["shots", "reports", "binary", "dump_sorted.pcap", "memory.dmp", "logs", "aux"]}
+        "dist": {"type": "-", "files": ["binary", "dump_sorted.pcap", "memory.dmp", "logs", "aux"]}
     }
 
     tar_formats = {
