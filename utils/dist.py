@@ -92,9 +92,9 @@ except ImportError:
     required("flask-sqlalchemy")
 
 
-class Retriever(object):
+class Retriever(threading.Thread):
 
-    def __init__(self, app):
+    def run(self):
         self.cleaner_queue = Queue.Queue()
         self.fetcher_queue = Queue.Queue()
         self.notification_queue = Queue.Queue()
@@ -102,8 +102,6 @@ class Retriever(object):
         self.status_count = dict()
         self.current_queue = dict()
         self.current_two_queue = dict()
-
-    def background(self):
 
         for x in xrange(int(reporting_conf.distributed.dist_threads)):
             if dist_lock.acquire(blocking=False):
@@ -159,6 +157,8 @@ class Retriever(object):
                             if (t.node_id, t.task_id) not in self.cleaner_queue.queue:
                                 self.cleaner_queue.put((t.node_id, t.task_id))
                             lock_retriever.release()
+                        else:
+                            log.debug("failed_cleaner t is None for: {} - node_id: {}".format(task["id"], t.node_id))
 
                 time.sleep(60)
 
@@ -173,15 +173,13 @@ class Retriever(object):
 
     def fetcher(self):
         """ Method that runs forever """
-
         with app.app_context():
-
             while True:
 
                 for node in Node.query.filter_by(enabled=True).all():
                     self.status_count.setdefault(node.name, 0)
 
-                    for task in node.fetch_tasks("reported", since=0):
+                    for task in node.fetch_tasks("reported"):
                         try:
                             if (task["id"] not in self.t_is_none.get(node.id, list()) and \
                                 (task, node.id) not in self.fetcher_queue.queue and \
@@ -200,13 +198,14 @@ class Retriever(object):
                                 node_data.enabled = False
                                 db.session.commit()
 
+                time.sleep(30)
+
 
     # This should be executed as external thread as it generates bottle neck
     def fetch_latest_reports(self):
 
         with app.app_context():
             while True:
-                    start = datetime.now().strftime("%Y-%m-%e %H:%M:%S")
                     task, node_id = self.fetcher_queue.get()
                     self.current_queue.setdefault(node_id, list()).append(task["id"])
 
@@ -215,8 +214,7 @@ class Retriever(object):
                         # possible that there are multiple combinations of
                         # node-id/task-id, in this case we take the last one available.
                         # (This makes it possible to re-setup a Cuckoo node).
-                        q = Task.query.filter_by(node_id=node_id, task_id=task["id"])
-                        t = q.order_by(Task.id.desc()).first()
+                        t = Task.query.filter_by(node_id=node_id, task_id=task["id"]).order_by(Task.id.desc()).first()
                         if t is None:
                             self.t_is_none.setdefault(node_id, list()).append(task["id"])
                             """
@@ -452,10 +450,10 @@ class Node(db.Model):
             log.critical("Error submitting task (task #%d, node %s): %s",
                          task.id, self.name, e)
 
-    def fetch_tasks(self, status, since=0):
+    def fetch_tasks(self, status):
         try:
             url = os.path.join(self.url, "tasks", "list")
-            params = dict(status=status, completed_after=since, ids=True)
+            params = dict(status=status, ids=True)
             r = requests.get(url, params=params,
                             auth = HTTPBasicAuth(self.ht_user, self.ht_pass),
                             verify = False)
@@ -539,6 +537,7 @@ class Task(db.Model):
 
 
 class StatusThread(threading.Thread):
+
     def submit_tasks(self, node, pend_tasks_num):
 
         if node.name != "master":
@@ -625,11 +624,8 @@ class StatusThread(threading.Thread):
             for node in Node.query.filter_by(enabled=True).all():
                 MINIMUMQUEUE[node.name] = Machine.query.filter_by(node_id=node.id).count()
 
-        statuses = {}
-        while True:
-            with app.app_context():
-                start = datetime.now()
-
+            statuses = {}
+            while True:
                 # Request a status update on all Cuckoo nodes.
                 for node in Node.query.filter_by(enabled=True).all():
                     status = node.status()
@@ -657,8 +653,6 @@ class StatusThread(threading.Thread):
                     elif statuses.get("master", {}).get("pending", 0) > MINIMUMQUEUE.get("master", 0) and \
                          status["pending"] < MINIMUMQUEUE[node.name]:
                        self.submit_tasks(node, MINIMUMQUEUE[node.name] - status["pending"])
-
-                    #db.session.commit()
 
                 STATUSES = statuses
 
@@ -901,8 +895,9 @@ if __name__ == "__main__":
             app.config["UPTIME_LOGFILE"] = reporting_conf.distributed.uptime_logfile
 
 
-        retrieve = Retriever(app)
-        retrieve.background()
+        retrieve = Retriever()
+        retrieve.daemon = True
+        retrieve.start()
 
         t = StatusThread()
         t.daemon = True
@@ -923,8 +918,9 @@ else:
     if reporting_conf.distributed.samples_directory:
         app.config["SAMPLES_DIRECTORY"] = reporting_conf.distributed.samples_directory
 
-    retrieve = Retriever(app)
-    retrieve.background()
+    retrieve = Retriever()
+    retrieve.daemon = True
+    retrieve.start()
 
     t = StatusThread()
     t.daemon = True
