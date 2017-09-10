@@ -58,7 +58,7 @@ class MISP(Report):
             elif ioc.get("regkey", ""):
                 self.misp.add_regkey(event, ioc["regkey"])
 
-    def cuckoo2misp(self, results, whitelist):
+    def cuckoo2misp(self, results, whitelist, whitelist_ua, tag_ids):
 
         distribution = int(self.options.get("distribution", 0))
         threat_level_id = int(self.options.get("threat_level_id", 2))
@@ -93,9 +93,10 @@ class MISP(Report):
                     if extract(req["uri"]).registered_domain not in filtered_iocs:
                         iocs.append({"uri": req["uri"]})
                         filtered_iocs.append(extract(req["uri"]).registered_domain)
-                    if "user-agent" in req and req["user-agent"] not in filtered_iocs:
-                        iocs.append({"ua": req["user-agent"]})
-                        filtered_iocs.append(req["user-agent"])
+
+                    if "user-agent" in req and not req["user-agent"].startswith(tuple(whitelist_ua)):
+                       iocs.append({"ua": req["user-agent"]})
+                       filtered_iocs.append(req["user-agent"])
 
         if self.options.get("ids_files", False) and "suricata" in results.keys():
             for surifile in results["suricata"]["files"]:
@@ -131,7 +132,7 @@ class MISP(Report):
 
         if iocs:
           
-            event = self.misp.new_event(distribution, threat_level_id, analysis, comment, date=datetime.now().strftime('%Y-%m-%d'), published=True)
+            event = self.misp.new_event(distribution, threat_level_id, analysis, comment, date=datetime.now().strftime('%Y-%m-%d'), published=False)
 
             # Add Payload delivery hash about the details of the analyzed file
             if results.get('target',{}).get('file',{}).get('name', ''):
@@ -142,7 +143,16 @@ class MISP(Report):
                                         sha256=results.get('target').get('file').get('sha256'),
                                         ssdeep=results.get('target').get('file').get('ssdeep'),
                                         comment='File: {} uploaded to cuckoo'.format(results.get('target').get('file').get('name')))
-          
+            
+            if tag_ids:
+                for tag_id in tag_ids.split(","):
+                    try:
+                        self.misp.tag(event['Event']['uuid'], tag_id)
+                    except Exception as e:
+                        log.error(e)
+
+            self.publish(event)
+
             for thread_id in xrange(int(self.threads)):
                 thread = threading.Thread(target=self.cuckoo2misp_thread, args=(iocs, event))
                 thread.daemon = True
@@ -152,6 +162,11 @@ class MISP(Report):
 
             for thread in threads_list:
                 thread.join()
+
+    def publish(self, event):
+        r = self.misp.get_event(event)
+        event = self.misp.publish(r)
+
 
     def misper_thread(self, url):
         while self.iocs:
@@ -211,6 +226,7 @@ class MISP(Report):
             self.threads = 5
 
         whitelist = list()
+        whitelist_ua = list()
         self.iocs = deque()
         self.misper = dict()
         threads_list = list()
@@ -223,6 +239,9 @@ class MISP(Report):
                 whitelist = Config("misp").whitelist.whitelist
                 if whitelist:
                     whitelist = [ioc.strip() for ioc in whitelist.split(",")]
+                whitelist_ua = Config("misp").whitelist.whitelist_ua
+                if whitelist_ua:
+                    whitelist_ua = [ioc.strip() for ioc in whitelist_ua.split(",")]
 
             self.misp = PyMISP(url, apikey, False, "json")
 
@@ -233,6 +252,7 @@ class MISP(Report):
 
                 if results.get("target", {}).get("file", {}).get("md5", "") and results["target"]["file"]["md5"] not in whitelist:
                     self.iocs.append(results["target"]["file"]["md5"])
+                    
                 for block in results.get("network", {}).get("hosts", []):
                     if block.get("ip", "") and block["ip"] not in self.iocs and block["ip"] not in whitelist:
                         self.iocs.append(block["ip"])
@@ -259,8 +279,10 @@ class MISP(Report):
                     full_report.write(json.dumps(self.misp_full_report))
                     full_report.close()
 
+            tag_ids = self.options.get("tag", None)
+
             if self.options.get("upload_iocs", False) and results.get("malscore", 0) >= self.options.get("min_malscore", 0):
-                self.cuckoo2misp(results, whitelist)
+                self.cuckoo2misp(results, whitelist, whitelist_ua, tag_ids)
 
         except Exception as e:
             log.error("Failed to generate JSON report: %s" % e)
