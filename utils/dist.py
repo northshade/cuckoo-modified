@@ -58,7 +58,7 @@ def required(package):
              (package, package))
 
 try:
-    from flask import Flask, request, make_response
+    from flask import Flask, request, make_response, jsonify
 except ImportError:
     required("flask")
 
@@ -764,7 +764,7 @@ class StatusRootApi(RestResource):
             processed=tasks.filter_by(finished=True).count(),
             pending=Task.query.filter_by(node_id=None).count(),
         )
-        return dict(nodes=STATUSES, tasks=tasks)
+        return jsonify({"nodes":STATUSES, "tasks":tasks})
 
 
 def output_json(data, code, headers=None):
