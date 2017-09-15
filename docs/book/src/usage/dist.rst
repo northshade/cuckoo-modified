@@ -455,7 +455,6 @@ Add clients, execute on master mongo server::
 
 Where 192.168.1.(2,3,4,5) is our cuckoo slaves
 
-    mongo>
     use cuckoo
     db.analysis.ensureIndex ( {"_id": "hashed" } )
     db.calls.ensureIndex ( {"_id": "hashed" } )
@@ -472,6 +471,18 @@ To see stats on master::
 Modify cuckoo reporting.conf [mongodb] to point all mongos in reporting.conf to
 host = 127.0.0.1
 port = 27020
+
+To remove shard node::
+
+    To see all shards:
+    db.adminCommand( { listShards: 1 } )
+
+    Then:
+    use admin
+    db.runCommand( { removeShard: "SHARD_NAME_HERE" } )
+
+For more information see:
+    https://docs.mongodb.com/manual/tutorial/remove-shards-from-cluster/
 
 
 If you need extra help, check this:
