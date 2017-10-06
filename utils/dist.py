@@ -202,6 +202,21 @@ def node_fetch_tasks(status, url, ht_user, ht_pass):
 
     return []
 
+def node_list_machines(url, ht_user, ht_pass):
+    try:
+        r = requests.get(os.path.join(url, "machines", "list"),
+                        auth = HTTPBasicAuth(ht_user, ht_pass),
+                        verify = False)
+
+        for machine in r.json()["machines"]:
+            yield Machine(name=machine["name"],
+                             platform=machine["platform"],
+                             tags=machine["tags"])
+    except Exception as e:
+        abort(404,
+            message="Invalid Cuckoo node (%s): %s" % (self.name, e))
+
+
 def node_get_report(task_id, fmt, url, ht_user, ht_pass, stream=False):
     try:
         url = os.path.join(url, "tasks", "report", "%d" % task_id, fmt)
@@ -690,7 +705,7 @@ class NodeRootApi(NodeBaseApi):
             return dict(success=False, message="Node called %s already exists" % args["name"])
 
         machines = []
-        for machine in node.list_machines():
+        for machine in node_list_machines(args["url"], args["ht_user"], args["ht_pass"]):
             machines.append(dict(
                 name=machine.name,
                 platform=machine.platform,
@@ -776,7 +791,7 @@ def update_machine_table(node_name):
     node = db.query(Node).filter_by(name=node_name).first()
 
     # get new vms
-    new_machines = node.list_machines()
+    new_machines = node_list_machines(node.url, node.ht_user, node.ht_pass)
 
     # delete all old vms
     machines = db.query(Machine).filter_by(node_id=node.id).delete()
