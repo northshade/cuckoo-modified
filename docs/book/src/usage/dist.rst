@@ -420,7 +420,7 @@ Set one mongo as master and the rest just point to it, in this example 192.168.1
 Depend of your hardware you may prepend next command before mongod
         numactl --interleave=all
 
-This commands should be executed only on master:
+This commands should be executed only on master::
 
     /usr/bin/mongod --configsvr # only central mongo
     /usr/bin/mongos --configdb 192.168.1.1 --port 27020
@@ -453,8 +453,9 @@ Add clients, execute on master mongo server::
     sh.addShard( "192.168.1.4:27017")
     sh.addShard( "192.168.1.5:27017")
 
-Where 192.168.1.(2,3,4,5) is our cuckoo slaves
+Where 192.168.1.(2,3,4,5) is our cuckoo slaves::
 
+    mongo --port 27020
     use cuckoo
     db.analysis.ensureIndex ( {"_id": "hashed" } )
     db.calls.ensureIndex ( {"_id": "hashed" } )
