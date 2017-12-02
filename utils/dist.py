@@ -39,6 +39,17 @@ from sqlalchemy.types import TypeDecorator
 Base = declarative_base()
 
 
+# http://pythoncentral.io/introductory-tutorial-python-sqlalchemy/
+from sqlalchemy import Column, ForeignKey, Integer, Text, String, Boolean, DateTime, or_, and_, desc
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, scoped_session, relationship
+from sqlalchemy.sql import func
+from sqlalchemy.types import TypeDecorator
+
+Base = declarative_base()
+
+
 # we need original db to reserve ID in db,
 # to store later report, from master or slave
 reporting_conf = Config("reporting")
@@ -295,6 +306,27 @@ def node_submit_task(task_id, node_id):
             return
 
         task.node_id = node.id
+
+        if task.main_task_id:
+            main_db.set_status(task.main_task_id, TASK_RUNNING)
+
+        # we don't need create extra id in master
+        # reserving id in main db, to later store in mongo with the same id
+        else:
+            main_task_id = main_db.add_path(
+                file_path=task.path,
+                package=task.package,
+                timeout=task.timeout,
+                options=task.options,
+                priority=task.priority,
+                machine=task.machine,
+                custom=task.custom,
+                memory=task.memory,
+                enforce_timeout=task.enforce_timeout,
+                tags=task.tags
+            )
+            main_db.set_status(main_task_id, TASK_RUNNING)
+            task.main_task_id = main_task_id
 
         # We have to refresh() the task object because otherwise we get
         # the unmodified object back in further sql queries..
