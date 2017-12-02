@@ -536,7 +536,6 @@ class AnalysisManager(threading.Thread):
                 self.interface
             )
             self.route = "tor"
-            #self.task.options["route"] = "tor"
             self.interface = self.cfg.routing.tor_interface
             self.rt_table = None
 
@@ -557,9 +556,6 @@ class AnalysisManager(threading.Thread):
 
         if self.rt_table:
             rooter("srcroute_enable", self.rt_table, self.machine.ip)
-
-        # Propagate the taken route to the database.
-        #self.db.set_route(self.task.id, self.route)
 
     def unroute_network(self):
         if self.interface:
