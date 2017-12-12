@@ -16,6 +16,14 @@ try:
 except ImportError:
     HAS_RARFILE = False
 
+
+try:
+    from tnefparse import TNEF
+    HAS_TNEFFILE = True
+except ImportError:
+    HAS_TNEFFILE = False
+
+
 from lib.cuckoo.common.config import Config
 from lib.cuckoo.common.objects import File
 from lib.cuckoo.common.email_utils import find_attachments_in_email
@@ -193,6 +201,48 @@ def demux_rar(filename, options):
 
     return retlist
 
+def demux_tnef(filename, options):
+    retlist = []
+
+    if not HAS_TNEFFILE:
+        return retlist
+
+    try:
+
+        ext = os.path.splitext(filename)[1]
+        if ext != ".dat" and ext != "" and ext != ".bin":
+            return retlist
+        
+        extracted = []
+
+        options = Config()
+        tmp_path = options.cuckoo.get("tmppath", "/tmp")
+        target_path = os.path.join(tmp_path, "cuckoo-rar-tmp")
+        if not os.path.exists(target_path):
+            os.mkdir(target_path)
+        tmp_dir = tempfile.mkdtemp(prefix='cuckootnef_',dir=target_path)
+
+        with open(filename, "rb") as tfile:
+            t = TNEF(tfile.read())
+            for a in t.attachments:
+                base, ext = os.path.splitext(a.name)
+                basename = os.path.basename(a.name)
+                ext = ext.lower()
+                if ext == "" and len(basename) and basename[0] == ".":
+                    continue
+                for theext in demux_extensions_list:
+                    if ext == theext:
+                        fullpath = os.path.join(tmp_dir, a.name)
+                        with open(fullpath, 'wb') as fp:
+                            fp.write(a.data)
+                        retlist.append(os.path.join(tmp_dir, a.name.replace("\\", "/")))
+
+    except:
+        pass
+
+    return retlist
+
+
 def demux_tar(filename, options):
     retlist = []
     ext = ""
@@ -354,6 +404,8 @@ def demux_sample(filename, package, options):
         retlist = demux_email(filename, options)
     if not retlist:
         retlist = demux_msg(filename, options)
+    if not retlist:
+        retlist = demux_tnef(filename, options)
     # handle ZIPs/RARs inside extracted files
     if retlist:
         newretlist = []
