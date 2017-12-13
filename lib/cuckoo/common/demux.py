@@ -217,10 +217,9 @@ def demux_tnef(filename, options):
 
         options = Config()
         tmp_path = options.cuckoo.get("tmppath", "/tmp")
-        target_path = os.path.join(tmp_path, "cuckoo-rar-tmp")
+        target_path = os.path.join(tmp_path, "cuckoo-tnef-tmp")
         if not os.path.exists(target_path):
             os.mkdir(target_path)
-        tmp_dir = tempfile.mkdtemp(prefix='cuckootnef_',dir=target_path)
 
         with open(filename, "rb") as tfile:
             t = TNEF(tfile.read())
@@ -232,6 +231,7 @@ def demux_tnef(filename, options):
                     continue
                 for theext in demux_extensions_list:
                     if ext == theext:
+                        tmp_dir = tempfile.mkdtemp(prefix='cuckootnef_', dir=target_path)
                         fullpath = os.path.join(tmp_dir, a.name)
                         with open(fullpath, 'wb') as fp:
                             fp.write(a.data)
