@@ -313,10 +313,10 @@ class Suricata(Processing):
                         tlog["dstport"] = parsed["dest_port"]
                         tlog["dstip"] = parsed["dest_ip"]
                         tlog["timestamp"] = parsed["timestamp"].replace("T", " ")
-                        tlog["fingerprint"] = parsed["tls"]["fingerprint"]
-                        tlog["issuer"] = parsed["tls"]["issuerdn"]
-                        tlog["version"] = parsed["tls"]["version"]
-                        tlog["subject"] = parsed["tls"]["subject"]
+                        tlog["fingerprint"] = parsed["tls"].get("fingerprint", "")
+                        tlog["issuer"] = parsed["tls"].get("issuerdn", "")
+                        tlog["version"] = parsed["tls"].get("version", "")
+                        tlog["subject"] = parsed["tls"].get("subject", "")
                         suricata["tls"].append(tlog)
 
                     elif parsed["event_type"] == "ssh":

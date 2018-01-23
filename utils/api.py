@@ -31,19 +31,6 @@ from lib.cuckoo.core.database import Database, TASK_RUNNING, Task
 
 # Global DB pointer.
 db = Database()
-repconf = Config("reporting")
-
-# http://api.mongodb.com/python/current/faq.html#using-pymongo-with-multiprocessing
-# this required for Distributed mode
-FULL_DB = False
-if repconf.mongodb.enabled:
-    import pymongo
-    results_db = pymongo.MongoClient(
-                     repconf.mongodb.host,
-                     repconf.mongodb.port
-                 )[repconf.mongodb.db]
-    FULL_DB = True
-
 # Increase request size limit
 BaseRequest.MEMFILE_MAX = 1024 * 1024 * 4
 
@@ -267,13 +254,6 @@ def tasks_delete(task_id):
         if db.delete_task(task_id):
             delete_folder(os.path.join(CUCKOO_ROOT, "storage",
                                        "analyses", "%d" % task_id))
-            if FULL_DB:
-                task = results_db.analysis.find_one({"info.id": task_id})
-                for processes in task.get("behavior", {}).get("processes", []):
-                    [results_db.calls.remove(call) for call in processes.get("calls", [])]
-
-                results_db.analysis.remove({"info.id": task_id})
-
             response["status"] = "OK"
         else:
             return HTTPError(500, "An error occurred while trying to "
@@ -300,8 +280,7 @@ def tasks_report(task_id, report_format="json"):
     bz_formats = {
         "all": {"type": "-", "files": ["memory.dmp"]},
         "dropped": {"type": "+", "files": ["files"]},
-        "dist" : {"type": "+", "files": ["shots", "reports"]},
-        "dist2": {"type": "-", "files": ["shots", "reports", "binary"]},
+        "dist": {"type": "-", "files": ["binary", "dump_sorted.pcap", "memory.dmp", "logs", "aux"]}
     }
 
     tar_formats = {
@@ -324,19 +303,14 @@ def tasks_report(task_id, report_format="json"):
             tarmode = tar_formats.get(request.GET.get("tar"), "w:bz2")
 
             tar = tarfile.open(fileobj=s, mode=tarmode)
+            if not os.path.exists(srcdir):
+                return HTTPError(400, "Path doesn't exists")
+
             for filedir in os.listdir(srcdir):
                 if bzf["type"] == "-" and filedir not in bzf["files"]:
                     tar.add(os.path.join(srcdir, filedir), arcname=filedir)
                 if bzf["type"] == "+" and filedir in bzf["files"]:
                     tar.add(os.path.join(srcdir, filedir), arcname=filedir)
-
-            if report_format.lower() == "dist" and FULL_DB:
-                buf = results_db.analysis.find_one({"info.id": task_id})
-                tarinfo = tarfile.TarInfo("mongo.json")
-                buf_dumped = json_util.dumps(buf)
-                tarinfo.size = len(buf_dumped)
-                buf = StringIO(buf_dumped)
-                tar.addfile(tarinfo, buf)
 
             tar.close()
             response.content_type = "application/x-tar; charset=UTF-8"

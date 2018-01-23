@@ -269,8 +269,8 @@ def tasks_create_file(request):
                             "error_value": "File size exceeds API limit"}
                     return jsonize(resp, response=True)
 
-                
-                tmp_path = store_temp_file(sample.read(), sample.name)
+
+                tmp_path = store_temp_file(sample.read(), sample.name.decode('utf-8', errors="ignore"))
                 if pcap:
                     if sample.name.lower().endswith(".saz"):
                         saz = saz_to_pcap(tmp_path)
@@ -279,7 +279,7 @@ def tasks_create_file(request):
                                 os.remove(tmp_path)
                             except:
                                 pass
-                            path = saz  
+                            path = saz
                         else:
                              resp = {"error": True,
                                      "error_value": "Failed to convert SAZ to PCAP"}
@@ -288,8 +288,8 @@ def tasks_create_file(request):
                         path = tmp_path
                     task_id = db.add_pcap(file_path=path)
                     task_ids.append(task_id)
-                    continue 
-            
+                    continue
+
                 if quarantine:
                     path = unquarantine(tmp_path)
                     try:
@@ -340,7 +340,7 @@ def tasks_create_file(request):
             if len(request.FILES.getlist("file")) > 1:
                 resp["warning"] = ("Multi-file API submissions disabled - "
                                    "Accepting first file")
-            tmp_path = store_temp_file(sample.read(), sample.name)
+            tmp_path = store_temp_file(sample.read(), sample.name.decode('utf-8', errors="ignore"))
             if pcap:
                 if sample.name.lower().endswith(".saz"):
                     saz = saz_to_pcap(tmp_path)
@@ -498,7 +498,7 @@ def tasks_create_url(request):
                 if request.POST.get("all_gw_in_group"):
                     tgateway = settings.GATEWAYS[gateway].split(",")
                     for e in tgateway:
-                        task_gateways.append(settings.GATEWAYS[e]) 
+                        task_gateways.append(settings.GATEWAYS[e])
                 else:
                     tgateway = random.choice(settings.GATEWAYS[gateway].split(","))
                     task_gateways.append(settings.GATEWAYS[tgateway])
@@ -532,7 +532,7 @@ def tasks_create_url(request):
                              )
                 if task_id:
                     task_ids.append(task_id)
-                 
+
         if len(task_ids):
             resp["data"] = {}
             resp["data"]["task_ids"] = task_ids
@@ -565,7 +565,7 @@ def tasks_vtdl(request):
             resp = {"error": True,
                     "error_value": "VTDL Create API is Disabled"}
             return jsonize(resp, response=True)
-        
+
         vtdl = request.POST.get("vtdl".strip(),None)
         resp["error"] = False
         # Parse potential POST options (see submission/views.py)
@@ -664,7 +664,7 @@ def tasks_vtdl(request):
             if not onesuccess:
                 resp = {"error": True, "error_value": "Provided hash(s) not found on VirusTotal {0}".format(hashlist)}
                 return jsonize(resp, response=True)
-         
+
         if len(task_ids) > 0:
             resp["data"] = {}
             resp["data"]["task_ids"] = task_ids
@@ -1185,7 +1185,7 @@ def tasks_status(request, task_id):
         resp = {"error": True,
                 "error_value": "Task does not exist"}
         return jsonize(resp, response=True)
-        
+
     status = task.to_dict()["status"]
     resp = {"error": False, "data": status}
 
@@ -1379,7 +1379,7 @@ def tasks_iocs(request, task_id, detail=None):
                 del tmpfile["file_info"]
                 data["network"]["ids"]["files"].append(tmpfile)
     data["static"] = {}
-    if "static" in buf.keys():
+    if "static" in buf.keys() and buf["static"] is not None:
         pe = {}
         pdf = {}
         office = {}
@@ -1677,7 +1677,7 @@ if apiconf.rollingsuri.get("enabled"):
 
 @ratelimit(key="ip", rate=raterps, block=rateblock)
 @ratelimit(key="ip", rate=raterpm, block=rateblock)
-    
+
 def tasks_rollingsuri(request, window=60):
     window = int(window)
     if request.method != "GET":
@@ -1694,7 +1694,7 @@ def tasks_rollingsuri(request, window=60):
             resp = {"error": True,
                     "error_value": "The Window You Specified is greater than the configured maximum"}
             return jsonize(resp, response=True)
-         
+
     gen_time = datetime.now() - timedelta(minutes=window)
     dummy_id = ObjectId.from_datetime(gen_time)
     result = list(results_db.analysis.find({"suricata.alerts": {"$exists": True}, "_id": {"$gte": dummy_id}},{"suricata.alerts":1,"info.id":1}))
@@ -1732,9 +1732,9 @@ def tasks_rollingshrike(request, window=60, msgfilter=None):
 
     gen_time = datetime.now() - timedelta(minutes=window)
     dummy_id = ObjectId.from_datetime(gen_time)
-    if msgfilter: 
+    if msgfilter:
        result = results_db.analysis.find({"info.shrike_url": {"$exists": True, "$ne":None }, "_id": {"$gte": dummy_id},"info.shrike_msg": {"$regex" : msgfilter, "$options" : "-1"}},{"info.id":1,"info.shrike_msg":1,"info.shrike_sid":1,"info.shrike_url":1,"info.shrike_refer":1},sort=[("_id", pymongo.DESCENDING)])
-    else:   
+    else:
         result = results_db.analysis.find({"info.shrike_url": {"$exists": True, "$ne":None }, "_id": {"$gte": dummy_id}},{"info.id":1,"info.shrike_msg":1,"info.shrike_sid":1,"info.shrike_url":1,"info.shrike_refer":1},sort=[("_id", pymongo.DESCENDING)])
 
     resp=[]
