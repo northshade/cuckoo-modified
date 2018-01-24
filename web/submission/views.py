@@ -73,6 +73,7 @@ def index(request):
         enforce_timeout = bool(request.POST.get("enforce_timeout", False))
         referrer = validate_referrer(request.POST.get("referrer", None))
         tags = request.POST.get("tags", None)
+        opt_filename = ""
         for option in options.split(","):
             if option.startswith("filename="):
                 opt_filename = option.split("filename=")[1]
@@ -169,8 +170,12 @@ def index(request):
 
                 # Moving sample from django temporary file to Cuckoo temporary storage to
                 # let it persist between reboot (if user like to configure it in that way).
+                if opt_filename:
+                    filename = opt_filename
+                else:
+                    filename = sample.name
                 path = store_temp_file(sample.read(),
-                                       sample.name.decode('utf-8', errors="ignore"))
+                                       filename.decode('utf-8', errors="ignore"))
 
                 for gw in task_gateways:
                     options = update_options(gw, orig_options)

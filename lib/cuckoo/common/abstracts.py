@@ -719,6 +719,18 @@ class Signature(object):
 
         return alexa
 
+    def advanced_url_parse(self, url):
+        if HAVE_TLDEXTRACT:
+            EXTRA_SUFFIXES = ('bit',)
+            parsed = False
+            try:
+                parsed = tldextract.TLDExtract(extra_suffixes=EXTRA_SUFFIXES)(url)
+            except Exception as e:
+                log.error(e)
+            return parsed
+        else:
+            log.info("missed tldextract dependency")
+
     def add_statistic(self, name, field, value):
         if name not in self.results["statistics"]["signatures"]:
             self.results["statistics"]["signatures"][name] = { }
@@ -1541,4 +1553,3 @@ class Feed(object):
                     with open(self.feedpath, "w") as feedfile:
                         feedfile.write(self.downloaddata)
         return
-
