@@ -22,6 +22,7 @@ def upload_to_host(file_path, dump_path, duplicate):
             while buf:
                 nc.send(buf, retry=True)
                 buf = infd.read(BUFSIZE)
+        log.info("Uplod to hsot: {0}".format(unicode(file_path).encode("utf-8", "replace")))
     except Exception as e:
         log.error("Exception uploading file {0} to host: {1}".format(unicode(file_path).encode("utf-8", "replace"), e))
     finally:

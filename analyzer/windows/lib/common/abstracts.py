@@ -10,6 +10,10 @@ from lib.api.process import Process
 from lib.api.utils import Utils
 from lib.common.exceptions import CuckooPackageError
 
+import logging
+log = logging.getLogger(__name__)
+
+
 class Package(object):
     """Base abstract analysis package."""
     PATHS = []
@@ -67,9 +71,9 @@ class Package(object):
         @return: executable path
         """
         for path in self.enum_paths():
+            log.info(" path %s" % path)
             if os.path.isfile(path):
                 return path
-
         raise CuckooPackageError("Unable to find any %s executable." %
                                  application)
 
@@ -82,6 +86,7 @@ class Package(object):
             for path in glob.iglob(path):
                 if os.path.isfile(path):
                     return path
+
 
         raise CuckooPackageError("Unable to find any %s executable." %
                                  application)

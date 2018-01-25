@@ -79,6 +79,8 @@ class VirtualBox(Machinery):
                                      "machine: %s" % e)
 
         self._wait_status(label, self.SAVED)
+        #self._wait_status(label, self.POWEROFF)
+
 
         try:
             proc = subprocess.Popen([self.options.virtualbox.path,

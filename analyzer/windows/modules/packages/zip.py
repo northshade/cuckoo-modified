@@ -133,4 +133,4 @@ class Zip(Package):
             wscript_args = "\"{0}\"".format(file_path)
             return self.execute(wscript, wscript_args, file_path)
         else:
-            return self.execute(file_path, self.options.get("arguments"), file_path)
+            return self.execute(file_path, self.options.get("arguments").replace("%2C",","), file_path)

@@ -562,6 +562,7 @@ class Process:
 
         config_path = "C:\\%s.ini" % self.pid
         with open(config_path, "w") as config:
+            log.info("process.py cfg file is {0}\n".format(self.pid))
             cfg = Config("analysis.conf")
             cfgoptions = cfg.get_options()
 

@@ -66,6 +66,8 @@ class GuestManager:
                 if self.server.get_status() == status:
                     log.debug("%s: status ready", self.id)
                     break
+                else:
+                    log.debug("status :0x%.04x", status)
             except:
                 pass
 
@@ -210,7 +212,6 @@ class GuestManager:
                 error = self.server.get_error()
                 if not error:
                     error = "unknown error"
-
                 raise CuckooGuestError("Analysis failed: {0}".format(error))
             elif status == CUCKOO_GUEST_INIT:
                 # means the system must have bluescreened or restarted and now we're getting the initial agent.py request again

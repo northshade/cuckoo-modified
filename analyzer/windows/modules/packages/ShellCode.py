@@ -4,7 +4,7 @@
 
 from lib.common.abstracts import Package
 
-class SWF(Package):
+class ShellCode(Package):
     """Shockwave Flash analysis package.
         Download a version of standalone flash from adobe and 
         place in bin/ as flashplayer.exe to use
@@ -15,4 +15,4 @@ class SWF(Package):
     """
 
     def start(self, path):
-        return self.execute("c:\\fp18_324_win_sa.exe", path, path)
+        return self.execute("c:\\shellc.exe", path, path)

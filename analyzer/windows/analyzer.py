@@ -234,6 +234,7 @@ def dump_files():
     """Dump all the dropped files."""
     for file_path in FILES_LIST:
         dump_file(file_path)
+    log.info("fle dumping done")
 
 class PipeHandler(Thread):
     """Pipe Handler.
@@ -599,7 +600,11 @@ class PipeHandler(Thread):
                                 # if it's a URL analysis, provide the URL to all processes as
                                 # the "interest" -- this will allow cuckoomon to see in the
                                 # child browser process that a URL analysis is occurring
-                                if self.config.category == "file" or NUM_INJECTED > 1:
+                                if self.config.package == "service" and NUM_INJECTED > 1 and "service-dll-of-interest" in self.options:
+                                # this helps with getting api calls return address pointed to calls in this dll as opposed to something else
+                                # this should be set to dll for that service or the exe for the service  
+                                    interest = self.options.get("service-dll-of-interest")
+                                elif self.config.category == "file" or NUM_INJECTED > 1:
                                     interest = filepath
                                 else:
                                     interest = self.config.target
@@ -752,6 +757,10 @@ class Analyzer:
         while proc.NextEntryOffset:
             p.value += proc.NextEntryOffset
             proc = cast(p, POINTER(SYSTEM_PROCESS_INFORMATION)).contents
+            #log.warning(proc)
+            #log.warning(proc.ImageName.Length)
+            #log.warning(proc.ImageName)
+            #log.warning(proc.UniqueProcessId)
             proclist.append((proc.ImageName.Buffer[:proc.ImageName.Length/2], proc.UniqueProcessId))
 
         for proc in proclist:
@@ -969,6 +978,14 @@ class Analyzer:
         # Start analysis package. If for any reason, the execution of the
         # analysis package fails, we have to abort the analysis.
         try:
+            #log.warning("starting pack target %s",
+            #             self.target)
+            #log.warning("pack %s",
+            #             pack.__dict__)
+            #log.warning("pack class %s",
+            #             pack.__class__)
+            #log.warning("pack dir %s",
+            #             dir(pack))
             pids = pack.start(self.target)
         except NotImplementedError:
             raise CuckooError("The package \"{0}\" doesn't contain a run "

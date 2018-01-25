@@ -141,6 +141,8 @@ def foreach_child(hwnd, lparam):
                     USER32.SendMessageW(hwnd, BM_CLICK, 0, 0)
                     # only stop searching when we click a button
                     return False
+                else:
+                    log.info("Found button \"%s\", NOT clicking it" % text.value)
     return True
 
 
@@ -250,7 +252,7 @@ class Human(Auxiliary, Thread):
             USER32.EnumWindows(EnumWindowsProc(getwindowlist), 0)
 
             while self.do_run:
-                if officedoc and (seconds % 30) == 0 and not CLOSED_OFFICE:
+                if officedoc and (seconds % 90) == 0 and not CLOSED_OFFICE:
                     USER32.EnumWindows(EnumWindowsProc(get_office_window), 0)
 
                 # only move the mouse 50% of the time, as malware can choose to act on an "idle" system just as it can on an "active" system

@@ -550,7 +550,7 @@ class Summary:
             funcname = self.get_argument(call, "FunctionName")
             if not funcname:
                 funcname = "#" + str(self.get_argument(call, "Ordinal"))
-            combined = dllname + "." + funcname
+            combined = dllname + "." + funcname + " @ " + call["caller"]
             if combined not in self.resolved_apis:
                 self.resolved_apis.append(combined)
 

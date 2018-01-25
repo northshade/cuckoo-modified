@@ -34,14 +34,43 @@ cuckoo.v12.suo
 data/yara/index_*.yar
 UpgradeLog.htm
 
-# Ignore conf backups
-cuckoo.conf-*
-auxiliary.conf-*
-memory.conf-*
-processing.conf-*
-reporting.conf-*
+api.conf
+auxiliary.conf
+cuckoo.conf
+esx.conf
+kvm.conf
+malheur.conf
+memory.conf
+modules/feeds/punch_plus_plus_pcres.py
+modules/signatures/*
+oracle_vbox.asc
+physical.conf
+processing.conf
+reporting.conf
+t1
+t2
+utils/logZoomedResults.py
+utils/serv_not_working.txt
+utils/zoomedSamples.txt
+virtualbox.conf
+vmware.conf
+vsphere.conf
+web/siteauth.sqlite
+xenserver.conf
+
 # Ignore Django auth DB
 web/siteauth.sqlite
 
 # Ignore feeds
 data/feeds/*
+
+analyzer/windows/dll/cuckoomon.dll.mar_2017
+analyzer/windows/dll/cuckoomon.orig.dll
+analyzer/windows/dll/cuckoomon.patched_InternetConnect_55_to_CC.dll
+analyzer/windows/dll/cuckoomon.patched_InternetReadFile_55_to_CC.dll
+analyzer/windows/dll/cuckoomon.patched_InternetSetOptionA_55_to_CC.dll
+analyzer/windows/dll/cuckoomon.patched_VirtualProtectEx_55_to_CC.dll
+analyzer/windows/dll/cuckoomon.patched_internet_send_like_55_to_CC.dll
+analyzer/windows/dll/cuckoomon.patched_recv_55_to_CC.dll
+analyzer/windows/dll/cuckoomon_x64.orig.dll
+

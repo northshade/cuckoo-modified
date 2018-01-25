@@ -1,0 +1,23 @@
+[^[]192.168.56.
+[^[]239.255.255.250
+[^[]224.0.0.252
+microsoft.com$
+windowsupdate.com/
+windowsupdate.com$
+[^\.]google.com$
+[^\.]www.google.com$
+auth.immunityinc.com/
+auth.immunityinc.com$
+debugger.immunityinc.com,POST
+adobe.com/
+adobe.com$
+macromedia.com/
+macromedia.com$
+time.windows.com/
+time.windows.com$
+Name 1.56.168.192.in-addr.arpa
+dns.msftncsi.com
+crl.microsoft.com/
+go.microsoft.com/
+microsoft.com/pki/crl/products/WinPCA.crl
+
