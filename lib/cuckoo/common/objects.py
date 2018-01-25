@@ -223,6 +223,13 @@ class File:
                     pass
             finally:
                 try:
+                    if file_type == "data":
+                        with open(self.file_path) as fd:
+                            for line in fd:
+                                file_type = magic.from_buffer(line.replace("\x00", ""))
+                                if "ASCII" in file_type:
+                                    file_type = file_type.replace("ASCII", "UTF-8 Unicode")
+                                break
                     ms.close()
                 except:
                     pass

@@ -1435,7 +1435,8 @@ class Signature(object):
             data=self.data,
             new_data=self.new_data,
             alert=self.alert,
-            families=self.families
+            families=self.families,
+            categories=self.categories
         )
 
 class Report(object):
@@ -1553,3 +1554,286 @@ class Feed(object):
                     with open(self.feedpath, "w") as feedfile:
                         feedfile.write(self.downloaddata)
         return
+
+class Signature(Signature):
+##[MerMod] This redefines the Signature class...
+##[MerMod] Adds a couple of helpers...
+    def check_read_entry(self, pattern, regex=False, all=False):
+        """Checks for a registry value being read.
+        @param pattern: string or expression to check for.
+        @param regex: boolean representing if the pattern is a regular
+                      expression or not and therefore should be compiled.
+        @param all: boolean representing if all results should be returned
+                      in a set or not
+        @return: depending on the value of param 'all', either a set of
+                      matched items or the first matched item
+        """
+        subject = self.results["behavior"]["extendedsummary"]["read_entries"]
+        return self._check_value(pattern=pattern,
+                                 subject=subject,
+                                 regex=regex,
+                                 all=all)
+
+    def check_write_entry(self, regkey_pattern, regvalue_pattern = "", regdata_pattern = "", regex=False, all=False):
+        """Checks for a registry value being created or modified.
+        @param regkey_pattern: registry key string or expression to check for.
+        @param regvalue_pattern: registry value string or expression to check for.
+        @param regdata_pattern: registry data string or expression to check for.
+        @param regex: boolean representing if the pattern is a regular
+                      expression or not and therefore should be compiled.
+        @param all: boolean representing if all results should be returned
+                      in a set or not
+        @return: depending on the value of param 'all', either a set of
+                      matched items or the first matched item
+        """
+        entries = self.results["behavior"]["extendedsummary"]["write_entries"]
+        if not entries:
+            return False
+        matches = []
+        for entry in entries:
+            value = False
+            reg = {}
+            try:
+                reg["regkey"] = entry["regkey"]
+                reg["regvalue"] = entry["regvalue"]
+                reg["regdata"] = entry["regdata"]
+            except:
+                continue
+            if regkey_pattern:
+                pattern = regkey_pattern
+                subject = entry["regkey"]
+                if self._check_value(pattern=pattern,
+                                     subject=subject,
+                                     regex=regex,
+                                     all=all):
+                    value = True
+            if regvalue_pattern:
+                pattern = regvalue_pattern
+                subject = entry["regvalue"]
+                if self._check_value(pattern=pattern,
+                                     subject=subject,
+                                     regex=regex,
+                                     all=all):
+                    value = value and True
+                else:
+                    value = False
+            if regdata_pattern:
+                pattern = regdata_pattern
+                subject = entry["regdata"]
+                if self._check_value(pattern=pattern,
+                                     subject=subject,
+                                     regex=regex,
+                                     all=all):
+                    value = value and True
+                else:
+                    value = False
+            if value:
+                if all:
+                    matches.append(reg)
+                else:
+                    return reg
+        return matches
+
+    def check_delete_entry(self, pattern, regex=False, all=False):
+        """Checks for a registry value being deleted.
+        @param pattern: string or expression to check for.
+        @param regex: boolean representing if the pattern is a regular
+                      expression or not and therefore should be compiled.
+        @param all: boolean representing if all results should be returned
+                      in a set or not
+        @return: depending on the value of param 'all', either a set of
+                      matched items or the first matched item
+        """
+        subject = self.results["behavior"]["extendedsummary"]["delete_entries"]
+        return self._check_value(pattern=pattern,
+                                 subject=subject,
+                                 regex=regex,
+                                 all=all)
+
+    def check_created_service(self, binpath_pattern, servicename_pattern = "", displayname_pattern = "", starttype = "", regex=False, all=False):
+        """Checks for a service being created.
+        @param binpath_pattern: service binary name string or expression to check for.
+        @param servicename_pattern: service name string or expression to check for.
+        @param displayname_pattern: service display name string or expression to check for.
+        @param starttype: service start type to check for.
+        @param regex: boolean representing if the pattern is a regular
+                      expression or not and therefore should be compiled.
+        @param all: boolean representing if all results should be returned
+                      in a set or not
+        @return: if all conditions are matched, return True. else, return False.
+        """
+        services = self.results["behavior"]["extendedsummary"]["created_services_extended"]
+        if not services:
+            return False
+        matches = []
+        for service in services:
+            value = False
+            if binpath_pattern:
+                pattern = binpath_pattern
+                subject = service["binpath"]
+                if self._check_value(pattern=pattern,
+                                     subject=subject,
+                                     regex=regex,
+                                     all=all):
+                    value = True
+            if servicename_pattern:
+                pattern = servicename_pattern
+                subject = service["servicename"]
+                if self._check_value(pattern=pattern,
+                                     subject=subject,
+                                     regex=regex,
+                                     all=all):
+                    value = value and True
+                else:
+                    value = False
+            if displayname_pattern:
+                pattern = displayname_pattern
+                subject = service["displayname"]
+                if self._check_value(pattern=pattern,
+                                     subject=subject,
+                                     regex=regex,
+                                     all=all):
+                    value = value and True
+                else:
+                    value = False
+            if starttype:
+                pattern = starttype
+                subject = service["starttype"]
+                if self._check_value(pattern=pattern,
+                                     subject=subject,
+                                     regex=False,
+                                     all=all):
+                    value = value and True
+                else:
+                    value = False
+            if value:
+                if all:
+                    matches.append(service)
+                else:
+                    return service
+        return matches
+
+    def check_remote_thread(self, injected = "", injector = "", regex = False, all = False):
+        """Checks for a remote thread being created.
+        @param injected: module path name of the injected process.
+        @param injector: module path name of the injector process.
+        @param regex: boolean representing if the pattern is a regular
+                      expression or not and therefore should be compiled.
+        @param all: boolean representing if all results should be returned
+                      in a set or not
+        @return: if all conditions are matched, return True. else, return False.
+        """
+        remote_threads = self.results["behavior"]["extendedsummary"]["remote_threads"]
+        if not remote_threads:
+            return False
+        if not injected and not injector:
+            return True
+        matches = []
+        for remote_thread in remote_threads:
+            value = True
+            if injected:
+                pattern = injected
+                subject = remote_thread["injected"]
+                if self._check_value(pattern=pattern,
+                                     subject=subject,
+                                     regex=regex,
+                                     all=all):
+                    value = value and True
+                else:
+                    value = False
+            if injector:
+                pattern = injector
+                subject = remote_thread["injector"]
+                if self._check_value(pattern=pattern,
+                                     subject=subject,
+                                     regex=regex,
+                                     all=all):
+                    value = value and True
+                else:
+                    value = False
+            if value:
+                if all:
+                    matches.append(remote_thread)
+                else:
+                    return remote_thread
+        return matches
+
+    def check_yara(self, pattern, regex=False, all=False):
+        """Checks for a yara match in process memory dump.
+        @param pattern: string or expression to check for.
+        @param regex: boolean representing if the pattern is a regular
+                      expression or not and therefore should be compiled.
+        @param all: boolean representing if all results should be returned
+                      in a set or not
+        @return: depending on the value of param 'all', either a set of
+                      matched items or the first matched item
+        """
+        subject = []
+        if "procmemory" in self.results and self.results["procmemory"]:
+            for process in self.results["procmemory"]:
+                if "yara" in process and process["yara"]:
+                    for rule in process["yara"]:
+                        subject.append(rule["name"])
+        return self._check_value(pattern=pattern,
+                                 subject=subject,
+                                 regex=regex,
+                                 all=all)
+
+    def check_suricata(self, pattern, regex=False, all=False):
+        """Checks for a suricata rule match.
+        @param pattern: string or expression to check for.
+        @param regex: boolean representing if the pattern is a regular
+                      expression or not and therefore should be compiled.
+        @param all: boolean representing if all results should be returned
+                      in a set or not
+        @return: depending on the value of param 'all', either a set of
+                      matched items or the first matched item
+        """
+        subject = []
+        if "suricata" in self.results and self.results["suricata"] and \
+           "alerts" in self.results["suricata"] and self.results["suricata"]["alerts"]:
+                for alert in self.results["suricata"]["alerts"]:
+                    subject.append(alert["signature"])
+        return self._check_value(pattern=pattern,
+                                 subject=subject,
+                                 regex=regex,
+                                 all=all)
+
+    def check_ransom_note(self, pattern, regex=False, all=False):
+        """Checks for ransom note match.
+        @param pattern: string or expression to check for.
+        @param regex: boolean representing if the pattern is a regular
+                      expression or not and therefore should be compiled.
+        @param all: boolean representing if all results should be returned
+                      in a set or not
+        @return: depending on the value of param 'all', either a set of
+                      matched items or the first matched item
+        """
+        subject = self.results["behavior"]["extendedsummary"]["ransomware_attributes"]["ransom_notes"]
+        return self._check_value(pattern=pattern,
+                                 subject=subject,
+                                 regex=regex,
+                                 all=all)
+
+    def check_encrypted_file(self, pattern, regex=False, all=False):
+        """Checks for encrypted file match.
+        @param pattern: string or expression to check for.
+        @param regex: boolean representing if the pattern is a regular
+                      expression or not and therefore should be compiled.
+        @param all: boolean representing if all results should be returned
+                      in a set or not
+        @return: depending on the value of param 'all', either a set of
+                      matched items or the first matched item
+        """
+        subject = self.results["behavior"]["extendedsummary"]["ransomware_attributes"]["encrypted_files"]
+        return self._check_value(pattern=pattern,
+                                 subject=subject,
+                                 regex=regex,
+                                 all=all)
+
+    def check_ransomware_attributes(self):
+        """Checks if ransomware_attributes is not empty.
+        @return: returns True if ransomware_attributes is not empty, otherwise returns False.
+        """
+        subject = self.results["behavior"]["extendedsummary"]["ransomware_attributes"]
+        return any([subject[key] for key in subject])

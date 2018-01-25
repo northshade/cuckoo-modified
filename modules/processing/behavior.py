@@ -2,6 +2,8 @@
 # This file is part of Cuckoo Sandbox - http://www.cuckoosandbox.org
 # See the file 'docs/LICENSE' for copying permission.
 
+# Modifications by MerX1030 [MerMod]
+
 import os
 import logging
 import datetime
@@ -1122,6 +1124,7 @@ class BehaviorAnalysis(Processing):
             ProcessTree(),
             Summary(),
             Enhanced(),
+			ExtendedSummary(behavior, self.dropped_path)
         ]
 
         # Iterate calls and tell interested signatures about them
@@ -1140,3 +1143,356 @@ class BehaviorAnalysis(Processing):
                 log.exception("Failed to run partial behavior class \"%s\"", instance.key)
 
         return behavior
+
+		
+import ntpath
+from lib.cuckoo.common.objects import File
+try:
+    import re2 as re
+except:
+    import re
+class ExtendedSummary(Summary):
+    """Generates additional summary information."""
+
+    key = "extendedsummary"
+
+    def __init__(self, behavior, dropped_path):
+        self.dropped_path = dropped_path
+##[MerMod] Add read_entries, write_entries, delete_entries, and remote_threads.
+        self.read_entries = []
+        self.write_entries = []
+        self.delete_entries = []
+        self.remote_threads = []
+        self.created_services_extended = []
+
+##[MerMod] Get process pid and name pairs.
+        self.process_pid_name_pairs = {}
+        for process in behavior["processes"]:
+            self.process_pid_name_pairs[process["process_id"]] = ntpath.basename(process["module_path"])
+
+##[MerMod] Integrated remote thread signature here.
+        self.lastprocess = None
+
+##[MerMod] Add ransom_notes.
+        self.ransom_note_indicators = ["your files",
+                                       "your data",
+                                       "your documents",
+                                       "restore files",
+                                       "restore data",
+                                       "restore the files",
+                                       "restore the data",
+                                       "recover files",
+                                       "recover data",
+                                       "recover the files",
+                                       "recover the data",
+                                       "has been locked",
+                                       "pay fine",
+                                       "pay a fine",
+                                       "pay the fine",
+                                       "decrypt",
+                                       "encrypt",
+                                       "recover files",
+                                       "recover data",
+                                       "recover them",
+                                       "recover your",
+                                       "recover personal",
+                                       "bitcoin",
+                                       "secret server",
+                                       "secret internet server",
+                                       "install tor",
+                                       "download tor",
+                                       "tor browser",
+                                       "tor gateway",
+                                       "tor-browser",
+                                       "tor-gateway",
+                                       "torbrowser",
+                                       "torgateway",
+                                       "torproject.org",
+                                       "ransom",
+                                       "bootkit",
+                                       "rootkit",
+                                       "payment",
+                                       "victim",
+                                       "AES128",
+                                       "AES256",
+                                       "AES 128",
+                                       "AES 256",
+                                       "AES-128",
+                                       "AES-256",
+                                       "RSA1024",
+                                       "RSA2048",
+                                       "RSA4096",
+                                       "RSA 1024",
+                                       "RSA 2048",
+                                       "RSA 4096",
+                                       "RSA-1024",
+                                       "RSA-2048",
+                                       "RSA-4096",
+                                       "private key",
+                                       "personal key",
+                                       "your code",
+                                       "private code",
+                                       "personal code",
+                                       "enter code",
+                                       "your key",
+                                       "unique key"
+                                       ]
+        self.ransom_notes = []
+        self.encrypted_files = []
+        self.file_modifications = ""
+        self.appends_email = ""
+        self.drops_unknown_mime_type = ""
+        self.movefilecount = 0
+        self.appendemailcount = 0
+        self.delete_shadow_copy = []
+
+##[MerMod] Add pretty_value option.
+    def get_argument(self, call, argname, strip=False, pretty_value=False):
+        for arg in call["arguments"]:
+            if arg["name"] == argname:
+                if pretty_value:
+                    if strip:
+                        return arg["pretty_value"].strip()
+                    else:
+                        return arg["pretty_value"]
+                else:
+                    if strip:
+                        return arg["value"].strip()
+                    else:
+                        return arg["value"]
+        return None
+
+    def get_remote_thread(self, call, process):
+        if process is not self.lastprocess:
+            self.sequence = 0
+            self.process_handles = set()
+            self.process_pids = set()
+            self.process_handle_pid_pairs = dict()
+            self.lastprocess = process
+            self.index = None
+                
+        if call["api"] == "OpenProcess" and call["status"] == True:
+            self.last_handle = call["return"]
+            self.last_pid = self.get_argument(call, "ProcessId")
+            self.process_handle_pid_pairs[self.last_handle] = self.last_pid
+            if self.last_pid != process["process_id"]:
+                self.process_handles.add(self.last_handle)
+                self.process_pids.add(self.last_pid)
+        elif call["api"] == "NtOpenProcess" and call["status"] == True:
+            self.last_handle = self.get_argument(call, "ProcessHandle")
+            self.last_pid = self.get_argument(call, "ProcessIdentifier")
+            self.process_handle_pid_pairs[self.last_handle] = self.last_pid
+            if self.last_pid != process["process_id"]:
+                self.process_handles.add(self.last_handle)
+                self.process_pids.add(self.last_pid)
+        elif (call["api"] == "NtMapViewOfSection") and self.sequence == 0:
+            self.last_handle = self.get_argument(call, "ProcessHandle")
+            if self.last_handle in self.process_handles:
+                self.sequence = 2
+        elif (call["api"] == "VirtualAllocEx" or call["api"] == "NtAllocateVirtualMemory") and self.sequence == 0:
+            self.last_handle = self.get_argument(call, "ProcessHandle")
+            if self.last_handle in self.process_handles:
+                self.sequence = 1
+        elif (call["api"] == "NtWriteVirtualMemory" or call["api"] == "WriteProcessMemory") and self.sequence == 1:
+            self.last_handle = self.get_argument(call, "ProcessHandle")
+            if self.last_handle in self.process_handles:
+                self.sequence = 2
+        elif (call["api"] == "NtWriteVirtualMemory" or call["api"] == "WriteProcessMemory") and self.sequence == 2:
+            self.last_handle = self.get_argument(call, "ProcessHandle")
+            if self.last_handle in self.process_handles:
+                addr = int(self.get_argument(call, "BaseAddress"), 16)
+                buf = self.get_argument(call, "Buffer")
+                if addr >= 0x7c900000 and addr < 0x80000000 and buf.startswith("\\xe9"):
+                    self.sequence = 0
+                    return int(self.process_handle_pid_pairs[self.last_handle])
+        elif (call["api"] == "CreateRemoteThread" or call["api"].startswith("NtCreateThread")) and self.sequence == 2:
+            self.sequence = 0
+            return int(self.process_handle_pid_pairs[self.last_handle])
+        elif call["api"] == "NtQueueApcThread" and self.sequence == 2:
+            self.sequence = 0
+            return int(self.last_pid)
+
+    def event_apicall(self, call, process):
+        """Generate processes list from streamed calls/processes.
+        @return: None.
+        """
+##[MerMod] Add full registry entry data in write_entries (regkey, regvalue, and regdata).
+##[MerMod] Distinguish created registry entries from created registry keys.
+        if call["api"].startswith("RegSetValue") or call["api"] == "NtSetValueKey":
+            name = self.get_argument(call, "FullName")
+            regkey = ntpath.dirname(name)
+            regvalue = ntpath.basename(name)
+            regdata = self.get_argument(call, "Buffer")
+            if not regdata:
+                regdata = ""
+            entry = {"regkey": regkey, "regvalue": regvalue, "regdata": regdata}
+            if entry not in self.write_entries:
+                self.write_entries.append(entry)
+##[MerMod] Distinguish deleted registry entries from deleted registry keys.
+        elif call["api"] == "NtDeleteValueKey" or call["api"].startswith("RegDeleteValue"):
+            name = self.get_argument(call, "FullName")
+            if name and name not in self.delete_entries:
+               self.delete_entries.append(name)
+        elif call["api"].startswith("RegQueryValue") or call["api"] == "NtQueryValueKey" or call["api"] == "NtQueryMultipleValueKey":
+            name = self.get_argument(call, "FullName")
+##[MerMod] Distinguised read registry entries from read registry keys.
+            if name and name not in self.read_entries:
+               self.read_entries.append(name)
+##[MerMod] Add to include process_pid_name_pairs from Process32NextW
+	elif call["api"].startswith("Process32Next"):
+            for argument in call["arguments"]:
+                pid = None
+                if argument["name"] == "ProcessId":
+                    pid = int(argument["value"])
+                if argument["name"] == "ProcessName":
+                    name = argument["value"]
+                if pid and pid not in self.process_pid_name_pairs.keys():
+                    self.process_pid_name_pairs[pid] = name
+##[MerMod] Add full service data in created_services_extended (binpath, servicename, displayname, and starttype).
+        elif call["api"].startswith("CreateService"):
+            servicename = self.get_argument(call, "ServiceName", strip=True)
+            displayname = self.get_argument(call, "DisplayName", strip=True)
+            starttype = self.get_argument(call, "StartType", strip=True, pretty_value=True)
+            binpath = self.get_argument(call, "BinaryPathName", strip=True)
+            created_service = {"servicename": servicename, "displayname": displayname, "starttype": starttype, "binpath": binpath}
+            if created_service not in self.created_services_extended:
+                self.created_services_extended.append(created_service)
+##[MerMod] Check for possible ransom notes.
+        elif call["api"] == "NtWriteFile":
+            buff = self.get_raw_argument(call, "Buffer").lower()
+            filepath = self.get_raw_argument(call, "HandleName")
+            patterns = "|".join(self.ransom_note_indicators)
+            if (filepath.lower() == "\\??\\physicaldrive0" or filepath.lower().startswith("\\device\\harddisk")) and len(buff) >= 128:
+                if len(set(re.findall(patterns, buff))) > 1:
+                    if filepath not in self.ransom_notes:
+                        self.ransom_notes.append(filepath)
+
+        elif call["api"] == "MoveFileWithProgressW" or call["api"] == "MoveFileWithProgressTransactedW":
+            origfile = self.get_argument(call, "ExistingFileName")
+            newfile = self.get_argument(call, "NewFileName")
+            self.movefilecount += 1
+            origfilename, origextension = ntpath.splitext(origfile)
+            if origfile != newfile:
+                if "@" in newfile:
+                    self.appendemailcount += 1
+            if origfile.lower() in newfile.lower():
+                encrypted_file = re.sub(re.escape(origfile), "{original filename}.{original extension}", newfile, flags=re.IGNORECASE)
+            elif origfilename.lower() in newfile.lower():
+                encrypted_file = re.sub(re.escape(origfilename), "{original filename}", newfile, flags=re.IGNORECASE)
+                encrypted_file = re.sub(re.escape(origextension), ".{original extension}", encrypted_file, flags=re.IGNORECASE)
+            else:
+                encrypted_file = newfile
+            self.encrypted_files.append(encrypted_file)   
+
+##[MerMod] Check for deletion of shadow copy.
+        elif call["api"] == "ShellExecuteExW":
+            filename = self.get_argument(call, "FilePath")
+            if len(filename) < 2 or filename[1] != ':':
+                filename = None
+            if filename and filename not in self.files:
+                self.files.append(filename)
+            path = self.get_argument(call, "FilePath", strip=True)
+            params = self.get_argument(call, "Parameters", strip=True)
+            cmdline = None
+            if path:
+                cmdline = path + " " + params
+            match = re.match(r".*(delete\s+shadows|shadowcopy\s+delete).*", cmdline, re.I)
+            if match and cmdline and cmdline not in self.delete_shadow_copy:
+                self.delete_shadow_copy.append(cmdline)
+                
+        elif call["api"] in ["CreateProcessInternalW", "NtCreateUserProcess", "CreateProcessWithTokenW", "CreateProcessWithLogonW"]:
+            cmdline = self.get_argument(call, "CommandLine", strip=True)
+            appname = self.get_argument(call, "ApplicationName", strip=True)
+            if appname and cmdline:
+                base = '.'.join(appname.split('\\')[-1].split('.')[:-1])
+                firstarg = ""
+                if cmdline[0] == "\"":
+                    firstarg = cmdline[1:].split("\"")[0]
+                else:
+                    firstarg = cmdline.split(" ")[0]
+                if base not in firstarg:
+                    cmdline = appname + " " + cmdline
+            match = re.match(r".*(delete\s+shadows|shadowcopy\s+delete).*", cmdline, re.I)
+            if match and cmdline and cmdline not in self.delete_shadow_copy:
+                self.delete_shadow_copy.append(cmdline)
+
+        elif call["api"].startswith("NtCreateProcess"):
+            cmdline = self.get_argument(call, "FileName")
+            match = re.match(r".*(delete\s+shadows|shadowcopy\s+delete).*", cmdline, re.I)
+            if match and cmdline and cmdline not in self.delete_shadow_copy:
+                self.delete_shadow_copy.append(cmdline)
+
+##[MerMod] Add remote thread details to remote_threads (injector process, and injected process).
+        injected_pid = self.get_remote_thread(call, process)
+        if injected_pid:
+            remote_thread = {}
+            remote_thread["injector"] = ntpath.basename(process["module_path"])
+            try:
+                remote_thread["injected"] = self.process_pid_name_pairs[injected_pid]
+            except:
+                remote_thread["injected"] = "Unable to log injected process."
+            if remote_thread not in self.remote_threads:
+                self.remote_threads.append(remote_thread)
+
+    def run(self):
+        """Get registry keys, mutexes and files.
+        @return: Summary of keys, read keys, written keys, mutexes and files.
+        """
+        buf = 8192
+        file_names = os.listdir(self.dropped_path)
+        droppedunknowncount = 0
+        droppedunknown = {}
+        for file_name in file_names:
+            file_path = os.path.join(self.dropped_path, file_name)
+            if not os.path.isfile(file_path):
+                continue
+            if file_name.endswith("_info.txt"):
+                continue
+            guest_paths = [line.strip() for line in open(file_path + "_info.txt")]
+            guest_paths = [x for x in guest_paths]
+            guest_name = guest_paths[0].split("\\")[-1]
+            file_info = File(file_path=file_path,guest_paths=guest_paths, file_name=guest_name).get_all()
+            if not "ASCII text" in file_info["type"] and not "Unicode text" in file_info["type"] and not "HTML document" in file_info["type"]:
+                if file_info["type"] == "data" and not file_info["name"].endswith(".tmp"):
+                    droppedunknowncount += 1
+                    encrypted_file = "{dropped filename}" + ntpath.splitext(file_info["name"])[-1]
+                    if encrypted_file not in droppedunknown:
+                        droppedunknown[encrypted_file] = 1
+                    else:
+                        droppedunknown[encrypted_file] += 1
+                continue
+            with open(file_info["path"], "r") as drop_open:
+                filedata = drop_open.read(buf + 1)
+            if file_info["type"].startswith("UTF-8 Unicode text") or file_info["type"].startswith("Little-endian UTF-16 Unicode text"):
+                filedata = filedata.replace("\x00", "")
+            if len(filedata) > buf:
+                data = convert_to_printable(filedata[:buf] + " <truncated>")
+            else:
+                data = convert_to_printable(filedata)
+            patterns = "|".join(self.ransom_note_indicators)
+            if len(data) >= 128:
+                if len(set(re.findall(patterns, data))) > 1:
+                    ransom_notes = sorted(set([ntpath.basename(x) for x in file_info["guest_paths"]]))
+                    for ransom_note in ransom_notes:
+                        if ransom_note not in self.ransom_notes:
+                            self.ransom_notes.append(ransom_note)
+        if self.movefilecount > 30:
+            self.file_modifications = "Performs %s file moves indicative of a potential file encryption process" % (self.movefilecount)
+
+        if self.appendemailcount > 30:
+            self.appends_email = "Appears to have appended an email address onto %s files. This is used by ransomware which requires the user to email the attacker for payment/recovery actions" % (self.appendemailcount)
+
+        if droppedunknowncount > 30:
+            self.drops_unknown_mime_type = "Drops %s unknown file mime types which may be indicative of encrypted files being written back to disk" % (droppedunknowncount)
+
+        if len(self.encrypted_files) <= 30:
+            self.encrypted_files = []
+
+        for encrypted_file in droppedunknown:
+            if droppedunknown[encrypted_file] > 30:
+                self.encrypted_files.append(encrypted_file)
+        self.encrypted_files = sorted(set(self.encrypted_files))
+
+        ransomware_attributes = {"ransom_notes": self.ransom_notes, "encrypted_files": self.encrypted_files, "file_modifications": self.file_modifications, "appends_email": self.appends_email, "drops_unknown_mime_type": self.drops_unknown_mime_type, "delete_shadow_copy": self.delete_shadow_copy}
+
+        return {"read_entries": self.read_entries, "write_entries": self.write_entries, "delete_entries": self.delete_entries, "remote_threads": self.remote_threads, "created_services_extended": self.created_services_extended, "ransomware_attributes": ransomware_attributes}

@@ -1,20 +1,25 @@
+<!-- Modifications also by MerX1030 -->
 <section id="summary">
     <h4>Summary</h4>
     <div class="tabbable tabs">
         <ul class="nav nav-pills" style="margin-bottom: 0;">
             <li class="active"><a href="#summary_files" data-toggle="tab">Accessed Files</a></li>
             <li><a href="#summary_read_files" data-toggle="tab">Read Files</a></li>
-            <li><a href="#summary_write_files" data-toggle="tab">Modified Files</a></li>
+            <li><a href="#summary_write_files" data-toggle="tab">Created/Modified Files</a></li>
             <li><a href="#summary_delete_files" data-toggle="tab">Deleted Files</a></li>
             <li><a href="#summary_keys" data-toggle="tab">Registry Keys</a></li>
             <li><a href="#summary_read_keys" data-toggle="tab">Read Registry Keys</a></li>
-            <li><a href="#summary_write_keys" data-toggle="tab">Modified Registry Keys</a></li>
+            <li><a href="#summary_write_keys" data-toggle="tab">Created/Modified Registry Keys</a></li>
             <li><a href="#summary_delete_keys" data-toggle="tab">Deleted Registry Keys</a></li>
             <li><a href="#summary_resolved_apis" data-toggle="tab">Resolved APIs</a></li>
             <li><a href="#summary_executed_commands" data-toggle="tab">Executed Commands</a></li>
             <li><a href="#summary_mutexes" data-toggle="tab">Mutexes</a></li>
             <li><a href="#summary_created_services" data-toggle="tab">Created Services</a></li>
             <li><a href="#summary_started_services" data-toggle="tab">Started Services</a></li>
+            <li><a href="#summary_read_entries" data-toggle="tab">Read Registry Entries</a></li>
+            <li><a href="#summary_write_entries" data-toggle="tab">Created/Modified Registry Entries</a></li>
+            <li><a href="#summary_delete_entries" data-toggle="tab">Deleted Registry Entries</a></li>
+            <li><a href="#summary_remote_threads" data-toggle="tab">Remote Threads</a></li>
         </ul>
         <div class="tab-content">
             <div class="tab-pane fade in active" id="summary_files">
@@ -118,7 +123,16 @@
             </div>
             <div class="tab-pane fade" id="summary_created_services">
                 <div class="well mono">
-                {% if analysis.behavior.summary.created_services %}
+                {% if analysis.behavior.extendedsummary.created_services_extended %}
+                    {% for service in analysis.behavior.extendedsummary.created_services_extended %}
+                        <p>
+                            <b>Service Name</b>: {{service.servicename}}<br>
+                            <b>Display Name</b>: {{service.displayname}}<br>
+                            <b>Start Type</b>: {{service.starttype}}<br>
+                            <b>Binary Pathname</b>: {{service.binpath}}
+                        </p>
+                    {% endfor %}
+                {% elif analysis.behavior.summary.created_services %}
                     {% for service in analysis.behavior.summary.created_services %}
                         {{service}}<br />
                     {% endfor %}
@@ -130,6 +144,49 @@
                 {% if analysis.behavior.summary.started_services %}
                     {% for service in analysis.behavior.summary.started_services %}
                         {{service}}<br />
+                    {% endfor %}
+                {% endif %}
+                </div>
+            </div>
+            <div class="tab-pane fade" id="summary_read_entries">
+                <div class="well mono">
+                {% if analysis.behavior.extendedsummary.read_entries %}
+                    {% for entry in analysis.behavior.extendedsummary.read_entries %}
+                        {{entry}}<br />
+                    {% endfor %}
+                {% endif %}
+                </div>
+            </div>
+            <div class="tab-pane fade" id="summary_write_entries">
+                <div class="well mono">
+                {% if analysis.behavior.extendedsummary.write_entries %}
+                    {% for entry in analysis.behavior.extendedsummary.write_entries %}
+                        <p>
+                            <b>RegKey</b>: {{entry.regkey}}<br>
+                            <b>RegValue</b>: {{entry.regvalue}}<br>
+                            <b>RegData</b>: {{entry.regdata}}
+                        </p>
+                    {% endfor %}
+                {% endif %}
+                </div>
+            </div>
+            <div class="tab-pane fade" id="summary_delete_entries">
+                <div class="well mono">
+                {% if analysis.behavior.extendedsummary.delete_entries %}
+                    {% for entry in analysis.behavior.extendedsummary.delete_entries %}
+                        {{entry}}<br />
+                    {% endfor %}
+                {% endif %}
+                </div>
+            </div>
+            <div class="tab-pane fade" id="summary_remote_threads">
+                <div class="well mono">
+                {% if analysis.behavior.extendedsummary.remote_threads %}
+                    {% for remote_thread in analysis.behavior.extendedsummary.remote_threads %}
+                        <p>
+                            <b>Injector Process</b>: {{remote_thread.injector}}<br>
+                            <b>Injected Process</b>: {{remote_thread.injected}}
+                        </p>
                     {% endfor %}
                 {% endif %}
                 </div>

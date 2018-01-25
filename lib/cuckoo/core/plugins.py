@@ -491,10 +491,10 @@ class RunSignatures(object):
                 malscore += match["weight"] * 0.5 * (match["confidence"] / 100.0)
             else:
                 malscore += match["weight"] * (match["severity"] - 1) * (match["confidence"] / 100.0)
-        if malscore > 10.0:
-            malscore = 10.0
-        if malscore < 0.0:
-            malscore = 0.0
+##        if malscore > 10.0:
+##            malscore = 10.0
+##        if malscore < 0.0:
+##            malscore = 0.0
         self.results["malscore"] = malscore
 
         family = ""
@@ -569,6 +569,12 @@ class RunSignatures(object):
             family = words[2]
 
         self.results["malfamily"] = family
+##[MerMod] Just to indicate that a malware_signatures was matched
+        self.results["malware_signature"] = []
+        for sig in self.results["signatures"]:
+            if "Malware Signature" in sig["categories"]:
+                self.results["malware_signature"].append(True) 
+                break
 
 class RunReporting:
     """Reporting Engine.

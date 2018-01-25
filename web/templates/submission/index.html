@@ -303,7 +303,7 @@ $(document).ready( function() {
                                 <select class="form-control" id="form_priority" name="priority">
                                     <option value="1">Low</option>
                                     <option value="2">Medium</option>
-                                    <option value="3">High</option>
+                                    <option value="3" selected>High</option>
                                 </select>
                             </div>
                             <div id="non-pcap-2">
@@ -366,7 +366,7 @@ $(document).ready( function() {
                             {% if config.procmemory %}
                             <div class="checkbox">
                                 <label>
-                                    <input type="checkbox" name="process_memory" /> Process Memory Dump
+                                    <input type="checkbox" name="process_memory" checked/> Process Memory Dump
                                 </label>
                             </div>
                             {% endif %}

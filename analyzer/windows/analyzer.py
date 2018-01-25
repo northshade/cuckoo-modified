@@ -1001,7 +1001,8 @@ class Analyzer:
             log.info("Enabled timeout enforce, running for the full timeout.")
             pid_check = False
 
-        time_counter = 0
+##        time_counter = 0
+        start_time = datetime.now()
         kernel_analysis = self.config.get_options().get("kernel_analysis", False)
 
         if kernel_analysis != False:
@@ -1010,8 +1011,10 @@ class Analyzer:
         emptytime = None
 
         while True:
-            time_counter += 1
-            if time_counter == int(self.config.timeout):
+##            time_counter += 1
+            time_diff = datetime.now() - start_time
+##            if time_counter == int(self.config.timeout):
+            if time_diff.total_seconds() >= int(self.config.timeout):
                 log.info("Analysis timeout hit, terminating analysis.")
                 break
 
@@ -1066,7 +1069,7 @@ class Analyzer:
                     log.warning("The package \"%s\" check function raised "
                                 "an exception: %s", package_name, e)
             finally:
-                # Zzz.
+                # Zzz. Whut
                 KERNEL32.Sleep(1000)
 
         # Create the shutdown mutex.
@@ -1075,6 +1078,7 @@ class Analyzer:
         # since the various processes poll for the existence of the mutex, sleep
         # for a second to ensure they see it before they're terminated
         KERNEL32.Sleep(1000)
+        dump_files()
 
         log.info("Shutting down package.")
         try:
