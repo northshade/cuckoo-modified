@@ -15,6 +15,9 @@ from lib.cuckoo.common.abstracts import Processing
 from lib.cuckoo.common.config import Config
 from lib.cuckoo.common.constants import CUCKOO_ROOT
 
+log = logging.getLogger(__name__)
+log.info("-------> Entered memory.py <------")
+
 try:
     import volatility.conf as conf
     import volatility.registry as registry
@@ -39,7 +42,7 @@ try:
 except ImportError:
     HAVE_VOLATILITY = False
 
-log = logging.getLogger(__name__)
+log.info("Passed vol tests:"+str(HAVE_VOLATILITY))
 
 class VolatilityAPI(object):
     """ Volatility API interface."""
@@ -899,12 +902,15 @@ class VolatilityAPI(object):
         @see volatility/plugins/imageinfo.py
         """
         log.debug("Executing Volatility imageinfo plugin on {0}".format(self.memdump))
+        log.info("Entered ------>>>>  imageinfo")
 
         self.__config()
         results = []
 
         command = self.plugins["imageinfo"](self.config)
         new = {}
+        log.info(type(commCalc))
+        log.info(commCalc)
         for key, value in command.calculate():
             new[key] = value
 
