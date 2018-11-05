@@ -660,8 +660,8 @@ def init_routing():
 
     # Check whether all VPNs exist if configured and make their configuration
     # available through the vpns variable. Also enable NAT on each interface.
-    if vpn.vpn.enabled:
-        for name in vpn.vpn.vpns.split(","):
+    if vpn.enabled:
+        for name in vpn.vpns.split(","):
             name = name.strip()
             if not name:
                 continue
