@@ -94,6 +94,8 @@ def flush_rttable(rt_table):
 def forward_enable(src, dst, ipaddr):
     """Enable forwarding a specific IP address from one interface into
     another."""
+    run(settings.iptables, "-D", "FORWARD", "-i", dest"-j", "REJECT")
+    run(settings.iptables, "-D", "FORWARD", "-o", dest"-j", "REJECT")
     run(settings.iptables, "-A", "FORWARD", "-i", src, "-o", dst,
         "--source", ipaddr, "-j", "ACCEPT")
 
