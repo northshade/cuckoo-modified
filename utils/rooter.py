@@ -94,6 +94,9 @@ def flush_rttable(rt_table):
 def forward_enable(src, dst, ipaddr):
     """Enable forwarding a specific IP address from one interface into
     another."""
+    # DELETE libvirt's default REJECT rules. e.g.:
+    # -A FORWARD -o virbr0 -j REJECT --reject-with icmp-port-unreachable
+    # -A FORWARD -i virbr0 -j REJECT --reject-with icmp-port-unreachable
     run(settings.iptables, "-D", "FORWARD", "-i", dest"-j", "REJECT")
     run(settings.iptables, "-D", "FORWARD", "-o", dest"-j", "REJECT")
     run(settings.iptables, "-A", "FORWARD", "-i", src, "-o", dst,
