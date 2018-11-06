@@ -663,7 +663,6 @@ def init_routing():
     if vpn.enabled:
         for name in vpn.vpns.split(","):
             name = name.strip()
-            log.info(name)
             if not name:
                 continue
 
@@ -672,8 +671,7 @@ def init_routing():
                     "Could not find VPN configuration for %s" % name
                 )
 
-            entry = vpn.get(name)
-            log.info(entry)
+            entry = Config("routing")
             add = 1
             if not rooter("nic_available", entry.interface):
                 raise CuckooStartupError(
