@@ -13,6 +13,61 @@ import socket
 import stat
 import subprocess
 import sys
+import tempfile
+import threading
+
+
+log = logging.getLogger(__name__)
+unixpath = tempfile.mktemp()
+lock = threading.Lock()
+
+
+class RooterClient:
+    """A rooter socket client"""
+    def __init__(self, socket_path="/tmp/cuckoo-rooter"):
+        self.socket_path = socket_path
+
+    def send_command(self, command, *args, **kwargs):
+        if not os.path.exists(self.socket_path):
+            log.critical(
+                "Unable to passthrough root command {0} as the rooter "
+                "unix socket {1} doesn't exist.".format(command, self.socket_path)
+            )
+            return
+
+        lock.acquire()
+
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+
+        if os.path.exists(unixpath):
+            os.remove(unixpath)
+
+        s.bind(unixpath)
+
+        try:
+            s.connect(self.socket_path)
+        except socket.error as e:
+            log.critical(
+                "Unable to passthrough root command as we're unable to "
+                "connect to the rooter unix socket: {0}.".format(e)
+            )
+            lock.release()
+            return
+
+        s.send(json.dumps({
+            "command": command,
+            "args": args,
+            "kwargs": kwargs,
+        }))
+
+        ret = json.loads(s.recv(0x10000))
+
+        lock.release()
+
+        if ret["exception"]:
+            log.warning("Rooter returned error: %s", ret["exception"])
+
+        return ret["output"]
 
 def run(*args):
     """Wrapper to Popen."""
