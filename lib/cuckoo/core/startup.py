@@ -655,8 +655,8 @@ def init_rooter():
 
 def init_routing():
     """Initialize and check whether the routing information is correct."""
-    routing = Config("routing")
-    vpn = routing.vpn
+    routing = Config("routing").routing
+    vpn = Config("routing").vpn
 
     # Check whether all VPNs exist if configured and make their configuration
     # available through the vpns variable. Also enable NAT on each interface.
