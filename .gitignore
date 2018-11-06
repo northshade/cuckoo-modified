@@ -37,7 +37,7 @@ UpgradeLog.htm
 # Ignore config files
 api.conf
 auxiliary.conf
-#cuckoo.conf
+cuckoo.conf
 esx.conf
 kvm.conf
 malheur.conf
@@ -47,7 +47,7 @@ modules/signatures/*
 oracle_vbox.asc
 physical.conf
 processing.conf
-#reporting.conf
+reporting.conf
 t1
 t2
 utils/logZoomedResults.py
