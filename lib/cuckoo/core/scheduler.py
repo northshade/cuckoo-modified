@@ -688,8 +688,8 @@ class Scheduler:
                     rooter("forward_disable", machine.interface, vpn.interface, machine.ip)
 
             # Drop forwarding rule to the internet / dirty line.
-            if self.routing_cfg.internet != "none":
-                rooter("forward_disable", machine.interface,self.routing_cfg.internet, machine.ip)
+            if self.routing_cfg.routing.internet != "none":
+                rooter("forward_disable", machine.interface,self.routing_cfg.routing.internet, machine.ip)
 
     def stop(self):
         """Stop scheduler."""
