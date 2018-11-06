@@ -655,9 +655,8 @@ def init_rooter():
 
 def init_routing():
     """Initialize and check whether the routing information is correct."""
-    cuckoo = Config()
-    rooting = Config("routing")
-    vpn = rooting.vpn
+    routing = Config("routing")
+    vpn = routing.vpn
 
     # Check whether all VPNs exist if configured and make their configuration
     # available through the vpns variable. Also enable NAT on each interface.
