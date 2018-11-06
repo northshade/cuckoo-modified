@@ -671,7 +671,7 @@ def init_routing():
                     "Could not find VPN configuration for %s" % name
                 )
 
-            entry = Config("routing")
+            entry = Config("routing")[name]
             add = 1
             if not rooter("nic_available", entry.interface):
                 raise CuckooStartupError(
