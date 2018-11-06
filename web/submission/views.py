@@ -352,6 +352,7 @@ def index(request):
                                       {"error": "Error adding task to Cuckoo's database."})
     else:
         cfg = Config("cuckoo")
+        routing = Config("routing")
         enabledconf = dict()
         enabledconf["vt"] = settings.VTDL_ENABLED
         enabledconf["kernel"] = settings.OPT_ZER0M0N
@@ -404,10 +405,10 @@ def index(request):
                                    "machines": machines,
                                    "gateways": settings.GATEWAYS,
                                    "vpns": vpns.values(),
-                                   "route": cfg.routing.route,
-                                   "internet": cfg.routing.internet,
-                                   "inetsim": cfg.routing.inetsim,
-                                   "tor": cfg.routing.tor,
+                                   "route": routing.routing.route,
+                                   "internet": routing.routing.internet,
+                                   "inetsim": routing.inetsim.enabled,
+                                   "tor": routing.tor.enabled,
                                    "config": enabledconf})
 
 @conditional_login_required(login_required, settings.WEB_AUTHENTICATION)
