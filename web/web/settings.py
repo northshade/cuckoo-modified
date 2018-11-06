@@ -160,8 +160,8 @@ STATICFILES_FINDERS = (
 # Template class for starting w. django 1.10
 TEMPLATES = [
     {
-        "BACKEND" : "django.template.backends.django.DjangoTemplates",
-        "TEMPLATE_DIRS" : [
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [
             "templates",
         ],
         "OPTIONS" : {
