@@ -510,6 +510,7 @@ class AnalysisManager(threading.Thread):
 
     def route_network(self):
         """Enable network routing if desired."""
+        self.routing_cfg = Config("routing")
         # Determine the desired routing strategy (none, internet, VPN).
         self.route = "none"
         if self.task.options:
@@ -523,19 +524,19 @@ class AnalysisManager(threading.Thread):
             self.interface = None
             self.rt_table = None
         elif self.route == "inetsim":
-            self.interface = self.cfg.routing.inetsim_interface
+            self.interface = self.routing_cfg.inetsim_interface
         elif self.route == "tor":
-            self.interface = self.cfg.routing.tor_interface
-        elif self.route == "internet" and self.cfg.routing.internet != "none":
-            self.interface = self.cfg.routing.internet
-            self.rt_table = self.cfg.routing.rt_table
+            self.interface = self.routing_cfg.tor_interface
+        elif self.route == "internet" and self.routing_cfg.internet != "none":
+            self.interface = self.routing_cfg.internet
+            self.rt_table = self.routing_cfg.rt_table
         elif self.route in vpns:
             self.interface = vpns[self.route].interface
             self.rt_table = vpns[self.route].rt_table
         else:
             log.warning("Unknown network routing destination specified, "
                         "ignoring routing for this analysis: %r", self.route)
-            self.interface = self.cfg.routing.inetsim_interface
+            self.interface = self.routing_cfg.inetsim_interface
             self.rt_table = None
             self.route = "tor"
 
@@ -548,16 +549,16 @@ class AnalysisManager(threading.Thread):
                 self.interface
             )
             self.route = "tor"
-            self.interface = self.cfg.routing.tor_interface
+            self.interface = self.routing_cfg.tor_interface
             self.rt_table = None
 
         if self.route == "inetsim":
-            rooter("inetsim_enable", self.machine.ip, self.cfg.routing.inetsim_server,
+            rooter("inetsim_enable", self.machine.ip, self.routing_cfg.inetsim_server,
                 str(self.cfg.resultserver.port))
 
         if self.route == "tor":
             rooter("tor_enable", self.machine.ip, str(self.cfg.resultserver.port),
-                str(self.cfg.routing.tor_dnsport), str(self.cfg.routing.tor_proxyport))
+                str(self.routing_cfg.tor_dnsport), str(self.routing_cfg.tor_proxyport))
 
         if self.route == "none":
             rooter("drop_enable", self.machine.ip, str(self.cfg.resultserver.port))
@@ -578,12 +579,12 @@ class AnalysisManager(threading.Thread):
             rooter("srcroute_disable", self.rt_table, self.machine.ip)
 
         if self.route == "inetsim":
-          rooter("inetsim_disable", self.machine.ip, self.cfg.routing.inetsim_server,
+          rooter("inetsim_disable", self.machine.ip, self.routing_cfg.inetsim_server,
                 str(self.cfg.resultserver.port))
 
         if self.route == "tor":
             rooter("tor_disable", self.machine.ip, str(self.cfg.resultserver.port),
-                str(self.cfg.routing.tor_dnsport), str(self.cfg.routing.tor_proxyport))
+                str(self.routing_cfg.tor_dnsport), str(self.routing_cfg.tor_proxyport))
 
         if self.route == "none":
             rooter("drop_disable", self.machine.ip, str(self.cfg.resultserver.port))
@@ -604,7 +605,7 @@ class Scheduler:
         self.db = Database()
         self.maxcount = maxcount
         self.total_analysis_count = 0
-        self.vpn_cfg = Config("vpn")
+        self.routing_cfg = Config("routing")
 
     def initialize(self):
         """Initialize the machine manager."""
@@ -682,13 +683,13 @@ class Scheduler:
                 continue
 
             # Drop forwarding rule to each VPN.
-            if self.vpn_cfg.vpn.enabled:
+            if self.routing_cfg.vpn.enabled:
                 for vpn in vpns.values():
                     rooter("forward_disable", machine.interface, vpn.interface, machine.ip)
 
             # Drop forwarding rule to the internet / dirty line.
-            if self.cfg.routing.internet != "none":
-                rooter("forward_disable", machine.interface,self.cfg.routing.internet, machine.ip)
+            if self.routing_cfg.internet != "none":
+                rooter("forward_disable", machine.interface,self.routing_cfg.internet, machine.ip)
 
     def stop(self):
         """Stop scheduler."""
