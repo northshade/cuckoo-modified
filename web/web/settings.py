@@ -83,6 +83,8 @@ COMMENTS = True
 
 DEBUG = True
 
+TIME_ZONE = "UTC"
+
 # Database settings. We don't need it.
 DATABASES = {
         'default': {
@@ -156,11 +158,10 @@ STATICFILES_FINDERS = (
 )
 
 # Template class for starting w. django 1.10
-TEMPLATE_DIRS = ["templates"]
 TEMPLATES = [
     {
         "BACKEND" : "django.template.backends.django.DjangoTemplates",
-        "DIRS" : [
+        "TEMPLATE_DIRS" : [
             "templates",
         ],
         "OPTIONS" : {
