@@ -57,7 +57,7 @@ class ElasticsearchDB(Report):
         report = dict(results)
 
         idxdate = report["info"]["started"].split(" ")[0]
-        call_index_name = '{0}-call-{1}'.format(index_prefix, idxdate)
+        call_index_name = '{0}-calls-{1}'.format(index_prefix, idxdate)
         analysis_index_name = '{0}-analysis-{1}'.format(index_prefix, idxdate)
 
         if not search_only:
@@ -87,7 +87,6 @@ class ElasticsearchDB(Report):
                                 logging.debug("Failed to save API call chunk: {0}\n\n{1}".format(error,
                                                                                                  json.dumps(to_insert,
                                                                                                             indent=2)))
-                                continue
                             # Reset the chunk.
                             chunk = []
 
@@ -106,7 +105,6 @@ class ElasticsearchDB(Report):
                             logging.debug("Failed to save API call chunk: {0}\n\n{1}".format(error,
                                                                                              json.dumps(to_insert,
                                                                                                         indent=2)))
-                            continue
 
                     # Add list of chunks.
                     new_process["calls"] = chunks_ids
