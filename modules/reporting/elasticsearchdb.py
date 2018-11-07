@@ -2,13 +2,13 @@
 # This file is part of Cuckoo Sandbox - http://www.cuckoosandbox.org
 # See the file 'docs/LICENSE' for copying permission.
 
-import datetime
 import logging
 import os
+import json
+
 
 from lib.cuckoo.common.abstracts import Report
 from lib.cuckoo.common.exceptions import CuckooDependencyError
-from lib.cuckoo.common.exceptions import CuckooReportError
 from lib.cuckoo.common.objects import File
 
 try:
@@ -18,6 +18,7 @@ except ImportError as e:
     HAVE_ELASTICSEARCH = False
 
 logging.getLogger("elasticsearch").setLevel(logging.WARNING)
+
 
 class ElasticsearchDB(Report):
     """Stores report in Elastic Search."""
@@ -56,7 +57,8 @@ class ElasticsearchDB(Report):
         report = dict(results)
 
         idxdate = report["info"]["started"].split(" ")[0]
-        self.index_name = '{0}-{1}'.format(index_prefix, idxdate)
+        call_index_name = '{0}-call-{1}'.format(index_prefix, idxdate)
+        analysis_index_name = '{0}-analysis-{1}'.format(index_prefix, idxdate)
 
         if not search_only:
             if not "network" in report:
@@ -76,10 +78,16 @@ class ElasticsearchDB(Report):
                         if len(chunk) == 100:
                             to_insert = {"pid": process["process_id"],
                                          "calls": chunk}
-                            pchunk = self.es.index(index=self.index_name,
-                                                   doc_type="calls", body=to_insert)
-                            chunk_id = pchunk['_id']
-                            chunks_ids.append(chunk_id)
+                            try:
+                                pchunk = self.es.index(index=call_index_name,
+                                                       doc_type="calls", body=to_insert)
+                                chunk_id = pchunk['_id']
+                                chunks_ids.append(chunk_id)
+                            except Exception as error:
+                                logging.debug("Failed to save API call chunk: {0}\n\n{1}".format(error,
+                                                                                                 json.dumps(to_insert,
+                                                                                                            indent=2)))
+                                continue
                             # Reset the chunk.
                             chunk = []
 
@@ -89,10 +97,16 @@ class ElasticsearchDB(Report):
                     # Store leftovers.
                     if chunk:
                         to_insert = {"pid": process["process_id"], "calls": chunk}
-                        pchunk = self.es.index(index=self.index_name, 
-                                               doc_type="calls", body=to_insert)
-                        chunk_id = pchunk['_id']
-                        chunks_ids.append(chunk_id)
+                        try:
+                            pchunk = self.es.index(index=call_index_name,
+                                                   doc_type="calls", body=to_insert)
+                            chunk_id = pchunk['_id']
+                            chunks_ids.append(chunk_id)
+                        except Exception as error:
+                            logging.debug("Failed to save API call chunk: {0}\n\n{1}".format(error,
+                                                                                             json.dumps(to_insert,
+                                                                                                        indent=2)))
+                            continue
 
                     # Add list of chunks.
                     new_process["calls"] = chunks_ids
@@ -140,5 +154,5 @@ class ElasticsearchDB(Report):
             report["virustotal_summary"] = "%s/%s" % (results["virustotal"]["positives"],results["virustotal"]["total"])
 
         # Store the report and retrieve its object id.
-        self.es.index(index=self.index_name, doc_type="analysis", id=results["info"]["id"], body=report)
-        
+        self.es.index(index=analysis_index_name, doc_type="analysis", id=results["info"]["id"], body=report)
+
