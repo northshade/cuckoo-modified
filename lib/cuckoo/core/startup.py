@@ -292,7 +292,9 @@ def cuckoo_clean():
     # Check if ElasticSearch is enabled and delete that data if it is.
     if cfg.elasticsearchdb and cfg.elasticsearchdb.enabled and not cfg.elasticsearchdb.searchonly:
         from elasticsearch import Elasticsearch
-        delidx = cfg.elasticsearchdb.index + "-*"
+        index_prefix = cfg.elasticsearchdb.index
+        call_index_pattern = '{0}-calls-*'.format(index_prefix)
+        analysis_index_pattern = '{0}-analysis-*'.format(index_prefix)
         try:
             es = Elasticsearch(
                      hosts = [{
@@ -306,27 +308,32 @@ def cuckoo_clean():
 
         if es:
             analyses = es.search(
-                           index=delidx,
+                           index=analysis_index_pattern,
                            doc_type="analysis",
                            q="*"
                        )["hits"]["hits"]
         if analyses:
             for analysis in analyses:
-                esidx = analysis["_index"]
                 esid = analysis["_id"]
-                # Check if behavior exists
-                if analysis["_source"]["behavior"]:
-                    for process in analysis["_source"]["behavior"]["processes"]:
-                        for call in process["calls"]:
-                            es.delete(
-                                index=esidx,
-                                doc_type="calls",
-                                id=call,
-                            )
                 # Delete the analysis results
                 es.delete(
-                    index=esidx,
+                    index=analysis_index_pattern,
                     doc_type="analysis",
+                    id=esid,
+                )
+
+        calls = es.search(
+            index=call_index_pattern,
+            doc_type="call",
+            q="*"
+        )["hits"]["hits"]
+        if calls:
+            for call in calls:
+                esid = call["_id"]
+                # Delete the analysis results
+                es.delete(
+                    index=call_index_pattern,
+                    doc_type="call",
                     id=esid,
                 )
 
@@ -699,7 +706,7 @@ def init_routing():
 
     # Check whether the default VPN exists if specified.
     if routing.route not in ("none", "internet"):
-        if not vpn.vpn.enabled:
+        if not Config("routing").vpn.enabled:
             raise CuckooStartupError(
                 "A VPN has been configured as default routing interface for "
                 "VMs, but VPNs have not been enabled in vpn.conf"

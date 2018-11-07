@@ -9,7 +9,7 @@ from settings import *
 # CUCKOO_PATH = "/where/cuckoo/is/placed/"
 
 # Maximum upload size.
-MAX_UPLOAD_SIZE = 26214400
+MAX_UPLOAD_SIZE = 200000000
 
 # Override default secret key stored in secret_key.py
 # Make this unique, and don't share it with anybody.
@@ -21,7 +21,6 @@ LANGUAGE_CODE = "en-us"
 
 ADMINS = (
     # ("Your Name", "your_email@example.com"),
-    ("Steve Clement", "steve.clement@circl.lu"),
 )
 
 MANAGERS = ADMINS
@@ -29,7 +28,7 @@ MANAGERS = ADMINS
 # Allow verbose debug error message in case of application fault.
 # It's strongly suggested to set it to False if you are serving the
 # web application from a web server front-end (i.e. Apache).
-DEBUG = True
+DEBUG = False
 
 # A list of strings representing the host/domain names that this Django site
 # can serve.

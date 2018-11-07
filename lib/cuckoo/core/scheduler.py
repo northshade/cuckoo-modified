@@ -524,9 +524,11 @@ class AnalysisManager(threading.Thread):
             self.interface = None
             self.rt_table = None
         elif self.route == "inetsim":
-            self.interface = self.routing_cfg.inetsim_interface
+            self.interface = None
+            self.rt_table = None
         elif self.route == "tor":
-            self.interface = self.routing_cfg.tor_interface
+            self.interface = None
+            self.rt_table = None
         elif self.route == "internet" and self.routing_cfg.internet != "none":
             self.interface = self.routing_cfg.internet
             self.rt_table = self.routing_cfg.rt_table
@@ -536,9 +538,9 @@ class AnalysisManager(threading.Thread):
         else:
             log.warning("Unknown network routing destination specified, "
                         "ignoring routing for this analysis: %r", self.route)
-            self.interface = self.routing_cfg.inetsim_interface
+            self.interface = None
             self.rt_table = None
-            self.route = "tor"
+            self.route = "none"
 
         # Check if the network interface is still available. If a VPN dies for
         # some reason, its tunX interface will no longer be available.
@@ -553,12 +555,12 @@ class AnalysisManager(threading.Thread):
             self.rt_table = None
 
         if self.route == "inetsim":
-            rooter("inetsim_enable", self.machine.ip, self.routing_cfg.inetsim_server,
-                str(self.cfg.resultserver.port))
+            rooter("inetsim_enable", self.machine.ip, self.routing_cfg.inetsim.server,
+                str(self.cfg.resultserver.port), self.routing_cfg.ports)
 
         if self.route == "tor":
             rooter("tor_enable", self.machine.ip, str(self.cfg.resultserver.port),
-                str(self.routing_cfg.tor_dnsport), str(self.routing_cfg.tor_proxyport))
+                str(self.routing_cfg.tor.dnsport), str(self.routing_cfg.tor.proxyport))
 
         if self.route == "none":
             rooter("drop_enable", self.machine.ip, str(self.cfg.resultserver.port))
@@ -579,12 +581,12 @@ class AnalysisManager(threading.Thread):
             rooter("srcroute_disable", self.rt_table, self.machine.ip)
 
         if self.route == "inetsim":
-          rooter("inetsim_disable", self.machine.ip, self.routing_cfg.inetsim_server,
-                str(self.cfg.resultserver.port))
+          rooter("inetsim_disable", self.machine.ip, self.routing_cfg.inetsim.server,
+                str(self.cfg.resultserver.port), self.routing_cfg.inetsim.ports)
 
         if self.route == "tor":
             rooter("tor_disable", self.machine.ip, str(self.cfg.resultserver.port),
-                str(self.routing_cfg.tor_dnsport), str(self.routing_cfg.tor_proxyport))
+                str(self.routing_cfg.tor.dnsport), str(self.routing_cfg.tor.proxyport))
 
         if self.route == "none":
             rooter("drop_disable", self.machine.ip, str(self.cfg.resultserver.port))

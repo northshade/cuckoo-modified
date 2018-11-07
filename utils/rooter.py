@@ -179,39 +179,98 @@ def srcroute_disable(rt_table, ipaddr):
     run(settings.ip, "rule", "del", "from", ipaddr, "table", rt_table)
     run(settings.ip, "route", "flush", "cache")
 
-def inetsim_enable(ipaddr, inetsim_ip, resultserver_port, interface):
-   """Enable hijacking of all traffic and send it to InetSIM."""
-   run(settings.iptables, "-t", "nat", "-I", "PREROUTING", "--source", ipaddr,
-       "-p", "tcp", "--syn", "!", "--dport", resultserver_port, "-j", "DNAT",
-       "--to-destination", "{}".format(inetsim_ip))
-   run(settings.iptables, "-A", "OUTPUT", "-m", "conntrack", "--ctstate",
-       "INVALID", "-j", "DROP")
-   run(settings.iptables, "-A", "OUTPUT", "-m", "state", "--state",
-       "INVALID", "-j", "DROP")
-   run(settings.iptables, "-t", "nat", "-A", "PREROUTING", "-p",
-       "tcp", "--dport", "53", "--source", ipaddr, "-j", "DNAT",
-       "--to-destination", "{}:53".format(inetsim_ip))
-   run(settings.iptables, "-t", "nat", "-A", "PREROUTING", "-p",
-       "udp", "--dport", "53", "--source", ipaddr, "-j", "DNAT",
-       "--to-destination", "{}:53".format(inetsim_ip))
-   run(settings.iptables, "-A", "OUTPUT", "-s", ipaddr, "-j", "DROP")
+def inetsim_redirect_port(action, srcip, dstip, ports):
+    """Note that the parameters (probably) mean the opposite of what they
+    imply; this method adds or removes an iptables rule for redirect traffic
+    from (srcip, srcport) to (dstip, dstport).
+    E.g., if 192.168.56.101:80 -> 192.168.56.1:8080, then it redirects
+    outgoing traffic from 192.168.56.101 to port 80 to 192.168.56.1:8080.
+    """
+    for entry in ports.split():
+        if entry.count(":") != 1:
+            log.debug("Invalid inetsim ports entry: %s", entry)
+            continue
+        srcport, dstport = entry.split(":")
+        if not srcport.isdigit() or not dstport.isdigit():
+            log.debug("Invalid inetsim ports entry: %s", entry)
+            continue
+        run(
+            s.iptables, "-t", "nat", action, "PREROUTING", "--source", srcip,
+            "-p", "tcp", "--syn", "--dport", srcport,
+            "-j", "DNAT", "--to-destination", "%s:%s" % (dstip, dstport)
+        )
+        run(
+            s.iptables, "-t", "nat", action, "PREROUTING", "--source", srcip,
+            "-p", "udp", "--dport", srcport,
+            "-j", "DNAT", "--to-destination", "%s:%s" % (dstip, dstport)
+        )
 
-def inetsim_disable(ipaddr, inetsim_ip, resultserver_port):
-   """Enable hijacking of all traffic and send it to InetSIM."""
-   run(settings.iptables, "-D", "PREROUTING", "-t", "nat", "--source", ipaddr,
-       "-p", "tcp", "--syn", "!", "--dport", resultserver_port, "-j", "DNAT",
-       "--to-destination", "{}".format(inetsim_ip))
-   run(settings.iptables, "-D", "OUTPUT", "-m", "conntrack", "--ctstate",
-       "INVALID", "-j", "DROP")
-   run(settings.iptables, "-D", "OUTPUT", "-m", "state", "--state",
-       "INVALID", "-j", "DROP")
-   run(settings.iptables, "-D", "PREROUTING", "-t", "nat", "-p", "tcp",
-       "--dport", "53", "--source", ipaddr, "-j", "DNAT", "--to-destination",
-       "{}:53".format(inetsim_ip))
-   run(settings.iptables, "-D", "PREROUTING", "-t", "nat", "-p", "udp",
-       "--dport", "53", "--source", ipaddr, "-j", "DNAT", "--to-destination",
-       "{}:53".format(inetsim_ip))
-   run(settings.iptables, "-D", "OUTPUT", "-s", ipaddr, "-j", "DROP")
+def inetsim_enable(ipaddr, inetsim_ip, machinery_iface, resultserver_port,
+                   ports):
+    """Enable hijacking of all traffic and send it to InetSim."""
+    inetsim_redirect_port("-A", ipaddr, inetsim_ip, ports)
+
+    run(
+        s.iptables, "-t", "nat", "-A", "PREROUTING", "--source", ipaddr,
+        "-p", "tcp", "--syn", "!", "--dport", resultserver_port,
+        "-j", "DNAT", "--to-destination", inetsim_ip
+    )
+
+    run(
+        s.iptables, "-t", "nat", "-A", "PREROUTING", "--source", ipaddr,
+        "-p", "udp", "-j", "DNAT", "--to-destination", inetsim_ip
+    )
+
+    run(
+        s.iptables, "-A", "OUTPUT", "-m", "conntrack", "--ctstate",
+        "INVALID", "-j", "DROP"
+    )
+
+    run(
+        s.iptables, "-A", "OUTPUT", "-m", "state", "--state",
+        "INVALID", "-j", "DROP"
+    )
+
+    dns_forward("-A", ipaddr, inetsim_ip)
+    forward_enable(machinery_iface, machinery_iface, ipaddr)
+
+    run(s.iptables, "-t", "nat", "-A", "POSTROUTING", "--source", ipaddr,
+        "-o", machinery_iface, "--destination", inetsim_ip, "-j", "MASQUERADE")
+
+    run(s.iptables, "-A", "OUTPUT", "-s", ipaddr, "-j", "DROP")
+
+def inetsim_disable(ipaddr, inetsim_ip, machinery_iface, resultserver_port,
+                    ports):
+    """Enable hijacking of all traffic and send it to InetSim."""
+    inetsim_redirect_port("-D", ipaddr, inetsim_ip, ports)
+
+    run(
+        s.iptables, "-D", "PREROUTING", "-t", "nat", "--source", ipaddr,
+        "-p", "tcp", "--syn", "!", "--dport", resultserver_port, "-j", "DNAT",
+        "--to-destination", inetsim_ip
+    )
+    run(
+        s.iptables, "-t", "nat", "-D", "PREROUTING", "--source", ipaddr,
+        "-p", "udp", "-j", "DNAT", "--to-destination", inetsim_ip
+    )
+
+    run(
+        s.iptables, "-D", "OUTPUT", "-m", "conntrack", "--ctstate",
+        "INVALID", "-j", "DROP"
+    )
+
+    run(
+        s.iptables, "-D", "OUTPUT", "-m", "state", "--state",
+        "INVALID", "-j", "DROP"
+    )
+
+    dns_forward("-D", ipaddr, inetsim_ip)
+    forward_disable(machinery_iface, machinery_iface, ipaddr)
+
+    run(s.iptables, "-t", "nat", "-D", "POSTROUTING", "--source", ipaddr,
+        "-o", machinery_iface, "--destination", inetsim_ip, "-j", "MASQUERADE")
+
+run(s.iptables, "-D", "OUTPUT", "-s", ipaddr, "-j", "DROP")
 
 def tor_enable(ipaddr, resultserver_port, dns_port, proxy_port):
    """Enable hijacking of all traffic and send it to TOR."""
