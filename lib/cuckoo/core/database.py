@@ -1167,8 +1167,8 @@ class Database(object):
             tasks = search.count()
             return tasks
         except SQLAlchemyError as e:
-            log.debug("Database error counting tasks: {0}".format(e))
-            return []
+            log.warn("Database error counting tasks: {0}".format(e))
+            return 0
         finally:
             session.close()
 
