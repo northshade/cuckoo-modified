@@ -146,6 +146,20 @@ def flush_rttable(rt_table):
 
     run(settings.ip, "route", "flush", "table", rt_table)
 
+def dns_forward(action, vm_ip, dns_ip, dns_port="53"):
+    """Route DNS requests from the VM to a custom DNS on a separate network."""
+    run(
+        settings.iptables, "-t", "nat", action, "PREROUTING", "-p", "tcp",
+        "--dport", "53", "--source", vm_ip, "-j", "DNAT",
+        "--to-destination", "%s:%s" % (dns_ip, dns_port)
+    )
+
+    run(
+        settings.iptables, "-t", "nat", action, "PREROUTING", "-p", "udp",
+        "--dport", "53", "--source", vm_ip, "-j", "DNAT",
+        "--to-destination", "%s:%s" % (dns_ip, dns_port)
+)
+
 def forward_enable(src, dst, ipaddr):
     """Enable forwarding a specific IP address from one interface into
     another."""
@@ -195,12 +209,12 @@ def inetsim_redirect_port(action, srcip, dstip, ports):
             log.debug("Invalid inetsim ports entry: %s", entry)
             continue
         run(
-            s.iptables, "-t", "nat", action, "PREROUTING", "--source", srcip,
+            settings.iptables, "-t", "nat", action, "PREROUTING", "--source", srcip,
             "-p", "tcp", "--syn", "--dport", srcport,
             "-j", "DNAT", "--to-destination", "%s:%s" % (dstip, dstport)
         )
         run(
-            s.iptables, "-t", "nat", action, "PREROUTING", "--source", srcip,
+            settings.iptables, "-t", "nat", action, "PREROUTING", "--source", srcip,
             "-p", "udp", "--dport", srcport,
             "-j", "DNAT", "--to-destination", "%s:%s" % (dstip, dstport)
         )
@@ -211,33 +225,33 @@ def inetsim_enable(ipaddr, inetsim_ip, machinery_iface, resultserver_port,
     inetsim_redirect_port("-A", ipaddr, inetsim_ip, ports)
 
     run(
-        s.iptables, "-t", "nat", "-A", "PREROUTING", "--source", ipaddr,
+        settings.iptables, "-t", "nat", "-A", "PREROUTING", "--source", ipaddr,
         "-p", "tcp", "--syn", "!", "--dport", resultserver_port,
         "-j", "DNAT", "--to-destination", inetsim_ip
     )
 
     run(
-        s.iptables, "-t", "nat", "-A", "PREROUTING", "--source", ipaddr,
+        settings.iptables, "-t", "nat", "-A", "PREROUTING", "--source", ipaddr,
         "-p", "udp", "-j", "DNAT", "--to-destination", inetsim_ip
     )
 
     run(
-        s.iptables, "-A", "OUTPUT", "-m", "conntrack", "--ctstate",
+        settings.iptables, "-A", "OUTPUT", "-m", "conntrack", "--ctstate",
         "INVALID", "-j", "DROP"
     )
 
     run(
-        s.iptables, "-A", "OUTPUT", "-m", "state", "--state",
+        settings.iptables, "-A", "OUTPUT", "-m", "state", "--state",
         "INVALID", "-j", "DROP"
     )
 
     dns_forward("-A", ipaddr, inetsim_ip)
     forward_enable(machinery_iface, machinery_iface, ipaddr)
 
-    run(s.iptables, "-t", "nat", "-A", "POSTROUTING", "--source", ipaddr,
+    run(settings.iptables, "-t", "nat", "-A", "POSTROUTING", "--source", ipaddr,
         "-o", machinery_iface, "--destination", inetsim_ip, "-j", "MASQUERADE")
 
-    run(s.iptables, "-A", "OUTPUT", "-s", ipaddr, "-j", "DROP")
+    run(settings.iptables, "-A", "OUTPUT", "-s", ipaddr, "-j", "DROP")
 
 def inetsim_disable(ipaddr, inetsim_ip, machinery_iface, resultserver_port,
                     ports):
@@ -245,32 +259,32 @@ def inetsim_disable(ipaddr, inetsim_ip, machinery_iface, resultserver_port,
     inetsim_redirect_port("-D", ipaddr, inetsim_ip, ports)
 
     run(
-        s.iptables, "-D", "PREROUTING", "-t", "nat", "--source", ipaddr,
+        settings.iptables, "-D", "PREROUTING", "-t", "nat", "--source", ipaddr,
         "-p", "tcp", "--syn", "!", "--dport", resultserver_port, "-j", "DNAT",
         "--to-destination", inetsim_ip
     )
     run(
-        s.iptables, "-t", "nat", "-D", "PREROUTING", "--source", ipaddr,
+        settings.iptables, "-t", "nat", "-D", "PREROUTING", "--source", ipaddr,
         "-p", "udp", "-j", "DNAT", "--to-destination", inetsim_ip
     )
 
     run(
-        s.iptables, "-D", "OUTPUT", "-m", "conntrack", "--ctstate",
+        settings.iptables, "-D", "OUTPUT", "-m", "conntrack", "--ctstate",
         "INVALID", "-j", "DROP"
     )
 
     run(
-        s.iptables, "-D", "OUTPUT", "-m", "state", "--state",
+        settings.iptables, "-D", "OUTPUT", "-m", "state", "--state",
         "INVALID", "-j", "DROP"
     )
 
     dns_forward("-D", ipaddr, inetsim_ip)
     forward_disable(machinery_iface, machinery_iface, ipaddr)
 
-    run(s.iptables, "-t", "nat", "-D", "POSTROUTING", "--source", ipaddr,
+    run(settings.iptables, "-t", "nat", "-D", "POSTROUTING", "--source", ipaddr,
         "-o", machinery_iface, "--destination", inetsim_ip, "-j", "MASQUERADE")
 
-run(s.iptables, "-D", "OUTPUT", "-s", ipaddr, "-j", "DROP")
+    run(settings.iptables, "-D", "OUTPUT", "-s", ipaddr, "-j", "DROP")
 
 def tor_enable(ipaddr, resultserver_port, dns_port, proxy_port):
    """Enable hijacking of all traffic and send it to TOR."""
