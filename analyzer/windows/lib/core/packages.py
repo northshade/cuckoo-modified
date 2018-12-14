@@ -42,14 +42,6 @@ def choose_package(file_type, file_name, exports):
     elif "Microsoft PowerPoint" in file_type or \
             file_name.endswith((".ppt", ".pot", ".pps", ".pptx", ".pptm", ".potx", ".potm", ".ppam", ".ppsx", ".ppsm", ".sldx", ".sldm")):
         return "ppt"
-    elif "Java Jar" in file_type or file_name.endswith(".jar"):
-        return "jar"
-    elif "Zip" in file_type:
-        return "zip"
-    elif "RAR archive" in file_type or file_name.endswith(".rar"):
-        return "rar"
-    elif "Macromedia Flash" in file_type or file_name.endswith(".swf"):
-        return "swf"
     elif file_name.endswith((".py", ".pyc")) or "Python script" in file_type:
         return "python"
     elif file_name.endswith(".vbs") or file_name.endswith(".vbe"):
@@ -68,9 +60,19 @@ def choose_package(file_type, file_name, exports):
         return "html"
     elif file_name.endswith(".hta"):
         return "hta"
+    elif file_name.endswith(".xps"):
+        return "xps"
     elif ( "XML DOCUMENT" in file_type.upper() or "HTML DOCUMENT" in file_type.upper() or "DATA" in file_type.upper() ) and "wsf" in file_name:
         return "wsf"
     elif "HTML" in file_type:
         return "html"
+    elif "Java Jar" in file_type or file_name.endswith(".jar"):
+        return "jar"
+    elif "RAR archive" in file_type or file_name.endswith(".rar"):
+        return "rar"
+    elif "Macromedia Flash" in file_type or file_name.endswith(".swf"):
+        return "swf"
+    elif "Zip" in file_type:
+        return "zip"
     else:
         return "generic"

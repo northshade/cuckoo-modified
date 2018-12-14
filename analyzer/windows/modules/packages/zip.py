@@ -18,14 +18,17 @@ from lib.common.exceptions import CuckooPackageError
 
 log = logging.getLogger(__name__)
 
+
 class Zip(Package):
     """Zip analysis package."""
     PATHS = [
              ("SystemRoot", "system32", "cmd.exe"),
              ("SystemRoot", "system32", "wscript.exe"),
+             ("SystemRoot", "system32", "xpsrchvw.exe"),
             ]
 
-    def filtered_namelist(self, archive):
+    @staticmethod
+    def filtered_namelist(archive):
         return [x for x in archive.namelist() if x]
 
     def extract_zip(self, zip_path, extract_path, password, recursion_depth):
@@ -62,7 +65,8 @@ class Zip(Package):
                         if name.endswith(".zip"):
                             # Recurse.
                             try:
-                                self.extract_zip(os.path.join(extract_path, name), extract_path, password, recursion_depth + 1)
+                                self.extract_zip(os.path.join(extract_path, name), extract_path, password,
+                                                 recursion_depth + 1)
                             except BadZipfile:
                                 log.warning("Nested zip file '%s' name end with 'zip' extension is not a valid zip. Skip extracting" % name)
                             except RuntimeError as run_err:
@@ -132,5 +136,10 @@ class Zip(Package):
             wscript = self.get_path_app_in_path("wscript.exe")
             wscript_args = "\"{0}\"".format(file_path)
             return self.execute(wscript, wscript_args, file_path)
+        elif file_name.lower().endswith(".xps"):
+            xpsrchvw = self.get_path_app_in_path("xpsrchvw.exe")
+            xpsrchvw_args = "\"{0}\"".format(file_path)
+            return self.execute(xpsrchvw, xpsrchvw_args, file_path)
         else:
-            return self.execute(file_path, self.options.get("arguments").replace("%2C",","), file_path)
+            args = self.options.get("arguments") or ""
+            return self.execute(file_path, args.replace("%2C", ","), file_path)
